@@ -5,11 +5,12 @@
 
 void testGame(Game *g){
 	play(g, 9, 9, GAME_P0);
-	play(g, 9, 8, GAME_P0);
-	play(g, 9, 7, GAME_P0);
-	play(g, 8, 9, GAME_P1);
+	play(g, 8, 9, GAME_P0);
+	play(g, 7, 9, GAME_P0);
+	play(g, 9, 8, GAME_P1);
 	play(g, 8, 8, GAME_P1);
-	play(g, 8, 7, GAME_P1);
+	play(g, 7, 8, GAME_P1);
+	play(g, 7,7,GAME_P1);
 }
 int main(int argc, char *argv[]){
 	printf("main started\n");
