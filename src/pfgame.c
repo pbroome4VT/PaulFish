@@ -28,6 +28,9 @@ int play(Game *g, char row, char col, Player_t player){
 		Piece pieces[16];
 		int numCaps = getMoveCaptures( g, row, col, player, pieces);
 		makeCaptures( g, pieces, numCaps );
+		return 1;
+	}
+	return 0;
 }
 
 int isInBounds(char row, char col){
@@ -43,38 +46,70 @@ int isGameOver( Game *g, char row, char col, Player_t player){
 	if (isInBounds(row, col)){
 		return g->captures[player] >= 10 || isConnect5(g, row, col, player);
 	}
+	return 0;
 }
 
 int isConnect5(Game *g, char row, char col, Player_t player){
 	char streak;
+	char i;
 	// check horizontal
 	streak = 1;
-	char i = 1;
+	i = 1;
 	while(getPlayerAt(g, row, col + (i++)) == player) { streak++; }
-	char i = 1;
+	i = 1;
 	while(getPlayerAt(g, row, col - (i++)) == player) { streak++; }
 	if(streak >= 5) { return 1;}
 
 	// check vertical
 	streak = 1;
-	char i = 1;
-	while(getPlayerAt(g, row + (i++), col) == player) { vertical++; }
-	char i = 1;
-	while(getPlayerAt(g, row, col - (i++)) == player) { horizontal++; }
-	if(horizontal >= 5) { return 1;}
+	i = 1;
+	while(getPlayerAt(g, row + (i++), col) == player) { streak++; }
+	i = 1;
+	while(getPlayerAt(g, row, col - (i++)) == player) { streak++; }
+	if(streak >= 5) { return 1;}
+
+	//check minor diag	
+	streak = 1;
+	i = 1;
+	while(getPlayerAt(g, row + i, col + i) == player) {
+		streak++;
+		i++;
+	}
+	i = 1;
+	while(getPlayerAt(g, row - i, col - i) == player) {
+		streak++;
+		i++;
+	}
+	if(streak >= 5) { return 1;}
+
+	// check major diag
+	streak = 1;
+	i = 1;
+	while(getPlayerAt(g, row - i, col + i) == player) {
+		streak++;
+		i++;
+	}
+	i = 1;
+	while(getPlayerAt(g, row + i, col - i) == player) {
+		streak++;
+		i++;
+	}
+	if(streak >= 5) { return 1;}
+	return 0;
 }
+
 
 void makeCaptures(Game *g, Piece pieces[16], int n){
 	for (int i = 0; i < n; i++){ 
-		Player_t player = getPlayerAt(g, pieces[i].row, pieces[i].col);
-		g->captures[player]++; // assumes points are of GAME_P0 or GAME_P1
-		play( g, pieces[i].row, pieces[i].col, GAME_EMPTY);
+		Player_t opp = getOpp(pieces[i].player);
+		g->captures[opp]++; // assumes player is GAME_P0 or GAME_P1
+		g->board[pieces[i].row][pieces[i].col] = GAME_EMPTY;
 	}
 }
 
 int getMoveCaptures(Game *g, char row, char col, Player_t player, Piece pieces[16]){
 	int numCaps = 0;
-	if ( isLegalMove( g, row, col ) ){
+	if ( isInBounds( row, col ) ){
 		Player_t opp = getOpp(player);
 		//test all 8 directions for captures
 		for (int rowDir = -1; rowDir<=1; rowDir++) {

@@ -39,6 +39,8 @@ int play(Game *g, char row, char col, Player_t player);
 
 int isGameOver(Game *g, char row, char col, Player_t player);
 
+int isConnect5(Game *g, char row, char col, Player_t player);
+
 void makeCaptures( Game *g, Piece pieces[16], int n);
 
 void getCurrGame(Game *g);

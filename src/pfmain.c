@@ -1,4 +1,5 @@
-#include <pfgame.h>
+#include "pfgame.h"
+#include "pfai.h"
 #include <stdio.h>
 #include <unistd.h>
 
@@ -12,31 +13,56 @@ void testGame(Game *g){
 	play(g, 7, 8, GAME_P1);
 	play(g, 7,7,GAME_P1);
 }
+
+void undoCmd(Game *g, Player_t *player){
+	printf("undo\n");
+}
+
+int moveCmd(Game *g, Player_t *player){
+	char colRead;
+	int rowRead;
+	scanf("%c%d",&colRead, &rowRead);
+	char col = colRead - 'a';
+	char row = (char)rowRead;
+	int c;
+	while ((c=getchar())!='\n'){}
+	printf("Playing at (%d, %d)\n", (int)(col), row);
+	if(!play(g, row, col, *player)){
+		printf("cannot play there, try again\n");
+	}
+	if (isGameOver(g, row, col, *player)){
+		// gameover
+		return 0;
+	}
+	*player = getOpp(*player);
+	return 1;
+}
+
 int main(int argc, char *argv[]){
 	printf("main started\n");
 	Game g;
 	initGame(&g);
 	testGame(&g);
 	Player_t player = GAME_P0;
-	while(1){	
-		printBoard(&g);
-		printf("player %d enter move : ", player);
-		int n;
-		unsigned char col;
-		unsigned int row;
-		scanf("%c%d", &col, &row);
-		int c;
-		while ((c=getchar())!='\n'){}
-		printf("Playing at (%d, %d)\n", (int)(col-'a'), row);
-		if(!play(&g, (char)row, col-'a', player)){
-			printf("cannot play there, try again\n");
-			continue;
-		}
-		if(player == GAME_P0){
-			player = GAME_P1;
+	int keepPlaying = 1;
+	printBoard(&g);
+	while(keepPlaying){	
+		printf("player %d enter move: ", player);
+		char cmd;
+		scanf( "%c", &cmd );
+		if (cmd == 'u'){
+			undoCmd(&g, &player);
+			printBoard(&g);
+		}else if (cmd == 'm'){//move
+			keepPlaying = moveCmd(&g, &player);
+			printBoard(&g);
+		}else if(cmd == '\n'){
 		}else{
-			player = GAME_P0;
+			printf("cmd unknown\n");
 		}
 	}
+	printf("Game OVER");
 }
+
+
 
