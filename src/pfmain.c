@@ -11,11 +11,13 @@ void testGame(Game *g){
 	play(g, 9, 8, GAME_P1);
 	play(g, 8, 8, GAME_P1);
 	play(g, 7, 8, GAME_P1);
-	play(g, 7,7,GAME_P1);
+	play(g, 7, 7, GAME_P1);
 }
 
 void undoCmd(Game *g, Player_t *player){
 	printf("undo\n");
+	undo( g );
+	*player = getOpp(*player);
 }
 
 int moveCmd(Game *g, Player_t *player){
@@ -46,7 +48,8 @@ int main(int argc, char *argv[]){
 	Player_t player = GAME_P0;
 	int keepPlaying = 1;
 	printBoard(&g);
-	while(keepPlaying){	
+	while(keepPlaying){
+	//	printGameStats(&g);	
 		printf("player %d enter move: ", player);
 		char cmd;
 		scanf( "%c", &cmd );

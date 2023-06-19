@@ -24,10 +24,41 @@ can be used to play peices or erase if player==GAME_EMPTY)
 */
 int play(Game *g, char row, char col, Player_t player){	
 	if ( isLegalMove( g, row, col ) ) {
-		g->board[row][col] = player;
-		Piece pieces[16];
+		GamePiece pieces[16];
 		int numCaps = getMoveCaptures( g, row, col, player, pieces);
+		PlayFrame srcFrame = getPlayFrame( g, row, col, player, pieces, numCaps );
+		PlayFrame *destFrame = g->playStack + g->numMoves ;
+		memcpy(destFrame, &srcFrame, sizeof(PlayFrame));	
+		g->board[row][col] = player;
 		makeCaptures( g, pieces, numCaps );
+		g->numMoves = g->numMoves + 1;
+		return 1;
+	}
+	return 0;
+}
+
+PlayFrame getPlayFrame( Game *g, char row, char col, Player_t player, GamePiece pieces[MAX_CAPTURES], char numCaps ){
+	PlayFrame playFrame;
+	playFrame.row = row;
+	playFrame.col = col;
+	memcpy( playFrame.oldCaptures, g->captures, sizeof(g->captures) );
+	playFrame.numCaps = numCaps;
+	memcpy ( playFrame.caps, pieces, sizeof(playFrame.caps) );
+	return playFrame;
+}
+
+int undo( Game *g ) {
+	if ( g->numMoves > 0 ){
+		g->numMoves--;
+		PlayFrame playFrame = g->playStack[g->numMoves];
+		memcpy ( g->captures, playFrame.oldCaptures, sizeof(g->captures) );
+		g->board[playFrame.row][playFrame.col] = GAME_EMPTY;
+		for( int i = 0; i < playFrame.numCaps; i++ ){
+			char pieceRow = playFrame.caps[i].row;
+			char pieceCol = playFrame.caps[i].col;
+			Player_t player = playFrame.caps[i].player;
+			g->board[pieceRow][pieceCol] = player;	
+		}
 		return 1;
 	}
 	return 0;
@@ -99,7 +130,7 @@ int isConnect5(Game *g, char row, char col, Player_t player){
 }
 
 
-void makeCaptures(Game *g, Piece pieces[16], int n){
+void makeCaptures(Game *g, GamePiece pieces[16], char n){
 	for (int i = 0; i < n; i++){ 
 		Player_t opp = getOpp(pieces[i].player);
 		g->captures[opp]++; // assumes player is GAME_P0 or GAME_P1
@@ -107,7 +138,7 @@ void makeCaptures(Game *g, Piece pieces[16], int n){
 	}
 }
 
-int getMoveCaptures(Game *g, char row, char col, Player_t player, Piece pieces[16]){
+int getMoveCaptures(Game *g, char row, char col, Player_t player, GamePiece pieces[16]){
 	int numCaps = 0;
 	if ( isInBounds( row, col ) ){
 		Player_t opp = getOpp(player);
@@ -175,3 +206,8 @@ void printBoard(Game *g){
 	printf("\n");
 }
 
+void printGameStats(Game *g){
+	printf("numMoves : %d\n", g->numMoves);
+	printf("p0 captures : %d\n", g->captures[GAME_P0]);
+	printf("p1 captures : %d\n", g->captures[GAME_P1]);
+}
