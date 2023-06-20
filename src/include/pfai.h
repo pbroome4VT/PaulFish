@@ -1,15 +1,35 @@
 #ifndef PFAI_H
 #define PFAI_H
-#endif
+
 
 #include "pfgame.h"
 
 
-typedef struct PaulFishStruct PaulFish;
-struct PaulFishStruct{
-	int w1;//weights
-	int w2;
+typedef struct Point Point;
+struct Point{
+	char row;
+	char col;
 };
 
+typedef struct PaulFishStruct PaulFish;
+struct PaulFishStruct{
+	int wNumPieces;
+};
 
-int minimax(PaulFish *pf, Game *game, int depth, int alpha, int beta); 
+typedef struct Eval Eval;
+struct Eval{
+	int eval;
+	char row;
+	char col;
+};
+
+Eval minimax(PaulFish *pf, Game *game, char depth, Player_t player, int alpha, int beta); 
+
+int getMoves(Game *g, Point points[BOARD_SIZE*BOARD_SIZE]);
+
+char pointWithinRad(Game *g, char row, char col, char rad);
+
+int heuristic( Game *g);
+
+char isMaxPlayer(Player_t player);
+#endif

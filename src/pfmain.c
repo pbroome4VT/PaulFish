@@ -29,15 +29,30 @@ int moveCmd(Game *g, Player_t *player){
 	int c;
 	while ((c=getchar())!='\n'){}
 	printf("Playing at (%d, %d)\n", (int)(col), row);
-	if(!play(g, row, col, *player)){
-		printf("cannot play there, try again\n");
+	int x = play( g, row, col, *player );
+	if( x == 1 ) {
+		*player = getOpp(*player);
+		return 1;
 	}
-	if (isGameOver(g, row, col, *player)){
-		// gameover
-		return 0;
+	if( x == -1 ){
+		printf("cant play there, try again\n");
+		return 1;
 	}
-	*player = getOpp(*player);
-	return 1;
+	return 0;
+}
+
+int compCmd(Game *g, Player_t *player){
+	int c;
+	while ((c=getchar())!='\n'){}
+	Eval eval = minimax( NULL, g, 1, *player, 0, 0 );
+	printf("eval : %d\n", eval.eval);
+	printf("computer playing at (%d,%d)", eval.row, eval.col);
+	int x = play( g, eval.row, eval.col, *player );	
+	if( x == 1 ) {
+		*player = getOpp(*player);
+		return 1;
+	}
+	return 0;
 }
 
 int main(int argc, char *argv[]){
@@ -49,7 +64,6 @@ int main(int argc, char *argv[]){
 	int keepPlaying = 1;
 	printBoard(&g);
 	while(keepPlaying){
-	//	printGameStats(&g);	
 		printf("player %d enter move: ", player);
 		char cmd;
 		scanf( "%c", &cmd );
@@ -59,7 +73,9 @@ int main(int argc, char *argv[]){
 		}else if (cmd == 'm'){//move
 			keepPlaying = moveCmd(&g, &player);
 			printBoard(&g);
-		}else if(cmd == '\n'){
+		}else if (cmd == '\n'){ //make computer move
+			keepPlaying = compCmd(&g, &player);
+			printBoard(&g);
 		}else{
 			printf("cmd unknown\n");
 		}

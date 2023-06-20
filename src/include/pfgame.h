@@ -3,6 +3,7 @@
 
 
 #define BOARD_SIZE 19
+#define BOARD_SPACES (BOARD_SIZE*BOARD_SIZE)
 #define MAX_GAME_MOVES ((BOARD_SIZE * BOARD_SIZE) + 20)		// mathematically the max number of moves
 #define MAX_CAPTURES 16  // mathematically max captures on single move
 

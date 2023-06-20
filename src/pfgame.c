@@ -32,9 +32,12 @@ int play(Game *g, char row, char col, Player_t player){
 		g->board[row][col] = player;
 		makeCaptures( g, pieces, numCaps );
 		g->numMoves = g->numMoves + 1;
+		if( isGameOver( g, row, col, player ) ){
+			return 0;
+		}
 		return 1;
 	}
-	return 0;
+	return -1;
 }
 
 PlayFrame getPlayFrame( Game *g, char row, char col, Player_t player, GamePiece pieces[MAX_CAPTURES], char numCaps ){
@@ -96,7 +99,7 @@ int isConnect5(Game *g, char row, char col, Player_t player){
 	i = 1;
 	while(getPlayerAt(g, row + (i++), col) == player) { streak++; }
 	i = 1;
-	while(getPlayerAt(g, row, col - (i++)) == player) { streak++; }
+	while(getPlayerAt(g, row - (i++), col) == player) { streak++; }
 	if(streak >= 5) { return 1;}
 
 	//check minor diag	
