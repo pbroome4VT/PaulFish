@@ -17,28 +17,41 @@ Eval minimax(PaulFish *pf, Game *g, char depth, Player_t player, int alpha, int 
 	}
 	Point moves[BOARD_SIZE*BOARD_SIZE];
 	int numMoves = getMoves(g, moves);
-	printf("numMoves %d\n", numMoves);
 	if ( player == GAME_P0 ){	
-		eval.eval = -1000;
+		eval.eval = -1;
 		for( int n = 0; n < numMoves; n++ ){
-			play( g, moves[n].row, moves[n].col, player );	
-			Eval tmpEval = minimax( pf, g, depth-1, getOpp(player), alpha, beta);
-			if( tmpEval.eval > eval.eval ){
-				eval = tmpEval;
+			if( play( g, moves[n].row, moves[n].col, player ) == PLAY_GAME_OVER){
+				eval.eval = 1;
 				eval.row = moves[n].row;
 				eval.col = moves[n].col;
+				undo(g);
+				return eval;
+			}else{
+				Eval tmpEval = minimax( pf, g, depth-1, getOpp(player), alpha, beta);
+				if( tmpEval.eval > eval.eval ){
+					eval = tmpEval;
+					eval.row = moves[n].row;
+					eval.col = moves[n].col;
+				}
 			}
 			undo(g);
 		}
 	}else{
-		eval.eval = 1000;
+		eval.eval = 1;
 		for( int n = 0; n < numMoves; n++ ){	
-			play( g, moves[n].row, moves[n].col, player );	
-			Eval tmpEval = minimax( pf, g, depth-1, getOpp(player), alpha, beta);
-			if( tmpEval.eval < eval.eval ){
-				eval = tmpEval;
+			if (play( g, moves[n].row, moves[n].col, player ) == PLAY_GAME_OVER) {
+				eval.eval = -1;
 				eval.row = moves[n].row;
 				eval.col = moves[n].col;
+				undo(g);
+				return eval;
+			}else{
+				Eval tmpEval = minimax( pf, g, depth-1, getOpp(player), alpha, beta);
+				if( tmpEval.eval < eval.eval ){
+					eval = tmpEval;
+					eval.row = moves[n].row;
+					eval.col = moves[n].col;
+				}
 			}
 			undo(g);
 		}
@@ -46,12 +59,13 @@ Eval minimax(PaulFish *pf, Game *g, char depth, Player_t player, int alpha, int 
 	return eval;
 }
 
+
 int getMoves(Game *g, Point points[BOARD_SIZE*BOARD_SIZE]){
 	int n = 0;
 	for( char row = 0; row < BOARD_SIZE; row++ ){
 		for( char col = 0; col < BOARD_SIZE; col++){
 			char radius = 2;
-			if( getPlayerAt(g,row,col) == GAME_EMPTY && pointWithinRad( g, row, col, radius ) ){
+			if( getPlayerAt(g,row,col) == GAME_EMPTY && isPieceWithinRad( g, row, col, radius ) ){
 				points[n].row = row;
 				points[n].col =col;
 				n++;
@@ -66,7 +80,8 @@ int getMoves(Game *g, Point points[BOARD_SIZE*BOARD_SIZE]){
 	return n;
 }
 
-char pointWithinRad(Game *g, char row, char col, char rad){
+
+char isPieceWithinRad(Game *g, char row, char col, char rad){
 	for(char r = row - rad; r <= row + rad; r++ ){
 		for( char c = col - rad; c <= col+rad; c++ ){
 			if( isInBounds(r,c) && getPlayerAt(g,r,c) != GAME_EMPTY ){
@@ -77,15 +92,61 @@ char pointWithinRad(Game *g, char row, char col, char rad){
 	return 0;
 }
 
+
 int heuristic( Game *g){
 	return 0;
 }
 
-char isMaxPlayer(Player_t player){
-	if( player == GAME_P0 ){
-		return 1;
-	}else if ( player == GAME_P1 ){
-		return 0;
+
+
+char isConnectN(Game  *g, char row, char col, const char N, Player_t player){
+	if( getPlayerAt( g, row, col ) == player ){		
+		char streak;
+		char i;
+
+		// check horizontal
+		streak = 1;
+		i = 1;
+		while(streak < N && getPlayerAt(g, row, col + (i++)) == player) { streak++; }
+		i = 1;
+		while(streak < N && getPlayerAt(g, row, col - (i++)) == player) { streak++; }
+		if(streak >= N) { return 1;}
+	
+		// check vertical
+		streak = 1;
+		i = 1;
+		while(streak < N && getPlayerAt(g, row + (i++), col) == player) { streak++; }
+		i = 1;
+		while(streak < N && getPlayerAt(g, row - (i++), col) == player) { streak++; }
+		if(streak >= N) { return 1;}
+	
+		//check minor diag	
+		streak = 1;
+		i = 1;
+		while(streak < N && getPlayerAt(g, row + i, col + i) == player) {
+			streak++;
+			i++;
+		}
+		i = 1;
+		while(streak < N && getPlayerAt(g, row - i, col - i) == player) {
+			streak++;
+			i++;
+		}
+		if(streak >= N) { return 1;}
+	
+		// check major diag
+		streak = 1;
+		i = 1;
+		while(streak < N && getPlayerAt(g, row - i, col + i) == player) {
+			streak++;
+			i++;
+		}
+		i = 1;
+		while(streak < N && getPlayerAt(g, row + i, col - i) == player) {
+			streak++;
+			i++;
+		}
+		if(streak >= N) { return 1;}
 	}
-	return -1;
+	return 0;
 }

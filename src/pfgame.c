@@ -22,7 +22,7 @@ void resetGame(Game *g){
 /*
 can be used to play peices or erase if player==GAME_EMPTY)
 */
-int play(Game *g, char row, char col, Player_t player){	
+Play_t play(Game *g, char row, char col, Player_t player){	
 	if ( isLegalMove( g, row, col ) ) {
 		GamePiece pieces[16];
 		int numCaps = getMoveCaptures( g, row, col, player, pieces);
@@ -33,11 +33,11 @@ int play(Game *g, char row, char col, Player_t player){
 		makeCaptures( g, pieces, numCaps );
 		g->numMoves = g->numMoves + 1;
 		if( isGameOver( g, row, col, player ) ){
-			return 0;
+			return PLAY_GAME_OVER;
 		}
-		return 1;
+		return PLAY_VALID;
 	}
-	return -1;
+	return PLAY_INVALID;
 }
 
 PlayFrame getPlayFrame( Game *g, char row, char col, Player_t player, GamePiece pieces[MAX_CAPTURES], char numCaps ){

@@ -51,7 +51,9 @@ void initGame (Game *g);
 
 void resetGame(Game *g);
 
-int play(Game *g, char row, char col, Player_t player);
+typedef enum Play_t Play_t;
+enum Play_t {PLAY_INVALID, PLAY_VALID, PLAY_GAME_OVER};
+Play_t play(Game *g, char row, char col, Player_t player);
 
 int undo( Game *g);
 

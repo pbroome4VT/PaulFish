@@ -30,11 +30,12 @@ int moveCmd(Game *g, Player_t *player){
 	while ((c=getchar())!='\n'){}
 	printf("Playing at (%d, %d)\n", (int)(col), row);
 	int x = play( g, row, col, *player );
-	if( x == 1 ) {
+	if( x == PLAY_VALID ) {
 		*player = getOpp(*player);
+		compCmd(g,player);
 		return 1;
 	}
-	if( x == -1 ){
+	if( x == PLAY_INVALID ){
 		printf("cant play there, try again\n");
 		return 1;
 	}
@@ -43,12 +44,12 @@ int moveCmd(Game *g, Player_t *player){
 
 int compCmd(Game *g, Player_t *player){
 	int c;
-	while ((c=getchar())!='\n'){}
-	Eval eval = minimax( NULL, g, 1, *player, 0, 0 );
-	printf("eval : %d\n", eval.eval);
+	//while ((c=getchar())!='\n'){}
+	Eval eval = minimax( NULL, g, 2, *player, 0, 0 );
+	printf("eval : %lf\n", eval.eval);
 	printf("computer playing at (%d,%d)", eval.row, eval.col);
 	int x = play( g, eval.row, eval.col, *player );	
-	if( x == 1 ) {
+	if( x == PLAY_VALID ) {
 		*player = getOpp(*player);
 		return 1;
 	}
