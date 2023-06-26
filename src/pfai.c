@@ -9,51 +9,47 @@
 /* must call with depth > 0 if you want eval to return with a move reccomendation */
 Eval minimax(PaulFish *pf, Game *g, char depth, Player_t player, int alpha, int beta){
 	Eval eval;
-	if( depth <= 0 ) {
-		eval.eval = heuristic(g);
-		eval.row = -1;
-		eval.col = -1;
-		return eval;
-	}
-	Point moves[BOARD_SIZE*BOARD_SIZE];
-	int numMoves = getMoves(g, moves);
-	if ( player == GAME_P0 ){	
-		eval.eval = -1;
-		for( int n = 0; n < numMoves; n++ ){
-			if( play( g, moves[n].row, moves[n].col, player ) == PLAY_GAME_OVER){
-				eval.eval = 1;
-				eval.row = moves[n].row;
-				eval.col = moves[n].col;
-				undo(g);
-				return eval;
-			}else{
-				Eval tmpEval = minimax( pf, g, depth-1, getOpp(player), alpha, beta);
-				if( tmpEval.eval > eval.eval ){
-					eval = tmpEval;
+	if( depth ) {
+		Point moves[BOARD_SIZE*BOARD_SIZE];
+		int numMoves = getMoves(g, moves);
+		if ( player == GAME_P0 ){	
+			eval.eval = -1;
+			for( int n = 0; n < numMoves; n++ ){
+				if( play( g, moves[n].row, moves[n].col, player ) == PLAY_GAME_OVER){
+					eval.eval = 1;
 					eval.row = moves[n].row;
 					eval.col = moves[n].col;
+					undo(g);
+					return eval;
+				}else{
+					Eval tmpEval = minimax( pf, g, depth-1, getOpp(player), alpha, beta);
+					if( tmpEval.eval > eval.eval ){
+						eval = tmpEval;
+						eval.row = moves[n].row;
+						eval.col = moves[n].col;
+					}
 				}
-			}
-			undo(g);
-		}
-	}else{
-		eval.eval = 1;
-		for( int n = 0; n < numMoves; n++ ){	
-			if (play( g, moves[n].row, moves[n].col, player ) == PLAY_GAME_OVER) {
-				eval.eval = -1;
-				eval.row = moves[n].row;
-				eval.col = moves[n].col;
 				undo(g);
-				return eval;
-			}else{
-				Eval tmpEval = minimax( pf, g, depth-1, getOpp(player), alpha, beta);
-				if( tmpEval.eval < eval.eval ){
-					eval = tmpEval;
+			}
+		}else{
+			eval.eval = 1;
+			for( int n = 0; n < numMoves; n++ ){	
+				if (play( g, moves[n].row, moves[n].col, player ) == PLAY_GAME_OVER) {
+					eval.eval = -1;
 					eval.row = moves[n].row;
 					eval.col = moves[n].col;
+					undo(g);
+					return eval;
+				}else{
+					Eval tmpEval = minimax( pf, g, depth-1, getOpp(player), alpha, beta);
+					if( tmpEval.eval < eval.eval ){
+						eval = tmpEval;
+						eval.row = moves[n].row;
+						eval.col = moves[n].col;
+					}
 				}
+				undo(g);
 			}
-			undo(g);
 		}
 	}
 	return eval;

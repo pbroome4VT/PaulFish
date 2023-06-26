@@ -56,7 +56,10 @@ int compCmd(Game *g, Player_t *player){
 	return 0;
 }
 
-int main(int argc, char *argv[]){
+
+
+
+void test(){
 	printf("main started\n");
 	Game g;
 	initGame(&g);
@@ -85,4 +88,9 @@ int main(int argc, char *argv[]){
 }
 
 
-
+int main(int argc, char *argv[]){
+	Game g;
+	initGame(&g);
+	testGame(&g);
+	printBoard(&g);
+}
