@@ -4,93 +4,64 @@
 #include <unistd.h>
 
 
-void testGame(Game *g){
-	play(g, 9, 9, GAME_P0);
-	play(g, 8, 9, GAME_P0);
-	play(g, 7, 9, GAME_P0);
-	play(g, 9, 8, GAME_P1);
-	play(g, 8, 8, GAME_P1);
-	play(g, 7, 8, GAME_P1);
-	play(g, 7, 7, GAME_P1);
+void initTestGame (Game*g){
+	playPlayer(g, 8, 8, GAME_PLAYER_B);
+	playPlayer(g, 8, 7, GAME_PLAYER_B);
+	playPlayer(g, 8, 6, GAME_PLAYER_B);
+	playPlayer(g, 9, 8, GAME_PLAYER_W);
+	playPlayer(g, 9, 7, GAME_PLAYER_W);
 }
-
-void undoCmd(Game *g, Player_t *player){
-	printf("undo\n");
-	undo( g );
-	*player = getOpp(*player);
-}
-
-int moveCmd(Game *g, Player_t *player){
-	char colRead;
-	int rowRead;
-	scanf("%c%d",&colRead, &rowRead);
-	char col = colRead - 'a';
-	char row = (char)rowRead;
-	int c;
-	while ((c=getchar())!='\n'){}
-	printf("Playing at (%d, %d)\n", (int)(col), row);
-	int x = play( g, row, col, *player );
-	if( x == PLAY_VALID ) {
-		*player = getOpp(*player);
-		compCmd(g,player);
-		return 1;
-	}
-	if( x == PLAY_INVALID ){
-		printf("cant play there, try again\n");
-		return 1;
-	}
-	return 0;
-}
-
-int compCmd(Game *g, Player_t *player){
-	int c;
-	//while ((c=getchar())!='\n'){}
-	Eval eval = minimax( NULL, g, 2, *player, 0, 0 );
-	printf("eval : %lf\n", eval.eval);
-	printf("computer playing at (%d,%d)", eval.row, eval.col);
-	int x = play( g, eval.row, eval.col, *player );	
-	if( x == PLAY_VALID ) {
-		*player = getOpp(*player);
-		return 1;
-	}
-	return 0;
-}
-
-
-
-
-void test(){
-	printf("main started\n");
-	Game g;
-	initGame(&g);
-	testGame(&g);
-	Player_t player = GAME_P0;
-	int keepPlaying = 1;
-	printBoard(&g);
-	while(keepPlaying){
-		printf("player %d enter move: ", player);
-		char cmd;
-		scanf( "%c", &cmd );
-		if (cmd == 'u'){
-			undoCmd(&g, &player);
-			printBoard(&g);
-		}else if (cmd == 'm'){//move
-			keepPlaying = moveCmd(&g, &player);
-			printBoard(&g);
-		}else if (cmd == '\n'){ //make computer move
-			keepPlaying = compCmd(&g, &player);
-			printBoard(&g);
-		}else{
-			printf("cmd unknown\n");
-		}
-	}
-	printf("Game OVER");
-}
-
 
 int main(int argc, char *argv[]){
 	Game g;
 	initGame(&g);
-	testGame(&g);
+	//initTestGame(&g);
+	Player_t player = GAME_PLAYER_B;
+	
+/*	while(1){
+		printFrame(&g);
+		char colIn;
+		int rowIn;
+		printf("player %s enter move : ", PLAYER_STR[player]);
+		scanf("%c%d",&colIn, &rowIn);
+		while(getchar()!='\n'){}
+		int col = colIn-'a';
+		int row = rowIn;
+		int test = playPlayer(&g, row, col , player);
+		if(test == -1){
+			printf("GAMEOVER\n");
+			return;
+		}
+		player = getOpp(player);
+	}*/
+
+	while(1){
+	//	printFullBoard(&g);
+		printFrame(&g);
+		int test = 0 ;
+		while (test == 0){
+		char colIn;
+		int rowIn;
+		printf("player %s enter move : ", PLAYER_STR[player]);
+		scanf("%c%d",&colIn, &rowIn);
+		while(getchar()!='\n'){}
+		int col = colIn-'a';
+		int row = rowIn;
+		printf("Playing at (%d, %d)\n", col, row);
+		test = playPlayer(&g, row, col, player);
+		if(test == -1){
+			printf("GAME_OVER\n");
+			return;
+		}
+		}
+
+		Eval eval = compute(&g, GAME_PLAYER_W, 2);
+		printf("eval = %d, sq = %d\n", eval.eval, eval.sq);
+		test = playPlayer(&g, getRow(eval.sq), getCol(eval.sq), GAME_PLAYER_W);
+		if(test == -1){
+			printf("game over\n");
+			return;
+		}
+	}
 	printBoard(&g);
 }

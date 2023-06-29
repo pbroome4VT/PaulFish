@@ -4,61 +4,31 @@
 #include "pfgame.h"
 
 
+// Black is "maximizer"
 
-/*
-GAME_P0 is "maximizing player" and GAME_P1 is "minimizing player"
-*/
+#define MAX_BRANCHES (30)
 
-
-
-
-
-typedef struct Point Point;
-struct Point{
-	char row;
-	char col;
+typedef struct EvalStruct Eval;
+struct EvalStruct{
+	int eval;
+	int sq;
 };
 
 
+Eval compute (Game *g, Player_t player, int depth);
 
-typedef enum BoardStat_t BoardStat_t;
-enum BoardStat_t { DIFF_PIECES, DIFF_DOUBLES, DIFF_TRIPLES, DIFF_QUADRUPLES, NUM_STATS };
-
-
-
-typedef struct PaulFishStruct PaulFish;
-struct PaulFishStruct{
-	const char weights[NUM_STATS][NUM_STATS];
-};
+Eval minimax(Game *g, char playerMask, int depth, int alpha, int beta);
 
 
 
-typedef struct Eval Eval;
-struct Eval{
-	double eval;
-	char row;
-	char col;
-};
+int getMoves(int *arr, int n, Game *g);
 
 
 
-// structure to hold
-typedef struct BoardStats BoardStats;
-struct BoardStats{
-	int stats[NUM_STATS];
-};
 
+/*===============================
+		test funcs
+================================*/
 
-
-Eval minimax(PaulFish *pf, Game *game, char depth, Player_t player, int alpha, int beta); 
-
-int getMoves(Game *g, Point points[BOARD_SIZE*BOARD_SIZE]);
-
-char isPieceWithinRad(Game *g, char row, char col, char rad);
-
-int heuristic( Game *g);
-
-char isConnectN(Game *g, char row, char col, const char N, Player_t player);
-
-
+void printMoves(int *moves, int n);
 #endif
