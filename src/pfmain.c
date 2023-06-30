@@ -55,7 +55,7 @@ int main(int argc, char *argv[]){
 		}
 		}
 
-		Eval eval = compute(&g, GAME_PLAYER_W, 2);
+		Eval eval = compute(&g, GAME_PLAYER_W, 5);
 		printf("eval = %d, sq = %d\n", eval.eval, eval.sq);
 		test = playPlayer(&g, getRow(eval.sq), getCol(eval.sq), GAME_PLAYER_W);
 		if(test == -1){
