@@ -51,16 +51,16 @@ int main(int argc, char *argv[]){
 		test = playPlayer(&g, row, col, player);
 		if(test == -1){
 			printf("GAME_OVER\n");
-			return;
+			break;
 		}
 		}
 
-		Eval eval = compute(&g, GAME_PLAYER_W, 5);
+		Eval eval = compute(&g, GAME_PLAYER_W, 4);
 		printf("eval = %d, sq = %d\n", eval.eval, eval.sq);
 		test = playPlayer(&g, getRow(eval.sq), getCol(eval.sq), GAME_PLAYER_W);
 		if(test == -1){
 			printf("game over\n");
-			return;
+			break;
 		}
 	}
 	printBoard(&g);

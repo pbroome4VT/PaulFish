@@ -6,7 +6,7 @@
 
 // Black is "maximizer"
 
-#define MAX_BRANCHES (30)
+#define MAX_BRANCHES (50)
 
 typedef struct EvalStruct Eval;
 struct EvalStruct{
@@ -22,6 +22,7 @@ Eval minimax(Game *g, char playerMask, int depth, int alpha, int beta);
 
 
 int getMoves(int *arr, int arrLen, Game *g);
+int getMovesChebyshev1Search(int *arr, int arrLen, int startIndex, Game *g, int sq);
 int getMovesStarSearch(int *arr, int arrLen, int startIndex, Game *g, int sq);
 int getMovesOffset(int *arr, int arrLen, int StartIndex, int offset, Game *g, int sq);
 int addIntToSet(int *arr, int arrLen, int value);

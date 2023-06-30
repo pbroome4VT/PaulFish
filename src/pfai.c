@@ -1,16 +1,24 @@
 #include "pfai.h"
 #include <stdio.h>
+#include <time.h>
 
-
+long int nodes = 0;
 
 Eval compute (Game *g, Player_t player, int depth){
-	return minimax(g, getPlayerMask(player), depth, -1000, 1000);
+	nodes = 0;
+	clock_t t = clock();
+	Eval eval = minimax(g, getPlayerMask(player), depth, -1000, 1000);
+	t = clock() - t;
+	double timeTaken = ((double)t) / CLOCKS_PER_SEC;
+	printf("%ld nodes\t%lf seconds\t%lf nodes/sec\n", nodes, timeTaken, nodes/timeTaken);
+	return eval;
 }
 
 
 
 Eval minimax(Game *g, char playerMask, int depth, int alpha, int beta){	
 	if(!depth){
+		nodes++;
 		Eval e = {.eval = 0, .sq=-1};
 		return e;
 	}
@@ -70,7 +78,8 @@ fetches candiate moves. candidates are found by looking at recent plays and sear
 int getMoves(int *arr, int arrLen, Game *g){
 	int totalMovesFound = 0;
 	for(int moveIndex = g->numMoves; moveIndex > 0; moveIndex--){	
-		int movesFound = getMovesStarSearch( arr, arrLen, totalMovesFound, g, g->moves[moveIndex] );	
+		int movesFound = getMovesChebyshev1Search(arr, arrLen, totalMovesFound, g, g->moves[moveIndex]);
+		//int movesFound = getMovesStarSearch( arr, arrLen, totalMovesFound, g, g->moves[moveIndex] );	
 		if(movesFound >= 0){
 			//found moves
 			totalMovesFound += movesFound;	
@@ -83,6 +92,32 @@ int getMoves(int *arr, int arrLen, Game *g){
 }
 
 
+int getMovesChebyshev1Search( int *arr, int arrLen, int startIndex, Game *g, int sq){
+	int arrIndex = startIndex;
+	for( char rowDir = -1; rowDir <= 1; rowDir++ ){
+		for( char colDir = -1; colDir <= 1; colDir++ ) {
+		if(rowDir == 0 && colDir == 0 ){ continue; }
+			int candidateSq = sq + rowDir * GAME_FULL_BOARD_LEN + colDir;
+			if ((candidateSq > 0) &&
+				(getBoardSq(g, candidateSq) & GAME_IN_BOUNDS_MASK) &&
+				((getBoardSq(g, candidateSq) & GAME_OCC_FLAG) == 0) &&
+				(arrIndex < arrLen))
+			{
+				arrIndex += addIntToSet(arr, arrIndex, candidateSq);
+			}
+		}
+	}
+	if(arrIndex >= arrLen){
+		return -1;
+	}
+	return arrIndex - startIndex;
+}
+
+
+/*
+searches for candidate moves in star formation around sq. first found move is added at startIndex then so on and so forth
+returns number of moves added to arr.
+*/
 int getMovesStarSearch( int *arr, int arrLen, int startIndex, Game *g, int sq){
 	int arrIndex = startIndex;
 	for( char rowDir = -1; rowDir <= 1; rowDir++ ){
@@ -140,6 +175,7 @@ int getMovesOffset( int *arr, int arrLen, int startIndex, int offset, Game *g, i
 	}
 	return arrIndex - startIndex; 
 }
+
 
 /*
 Function inserts value into set assuming value doesnt already exist in indices [0,index)
