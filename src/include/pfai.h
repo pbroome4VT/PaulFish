@@ -6,7 +6,7 @@
 
 // Black is "maximizer"
 
-#define MAX_BRANCHES (50)
+#define MAX_BRANCHES (40)
 
 typedef struct EvalStruct Eval;
 struct EvalStruct{

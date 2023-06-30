@@ -7,7 +7,7 @@ long int nodes = 0;
 Eval compute (Game *g, Player_t player, int depth){
 	nodes = 0;
 	clock_t t = clock();
-	Eval eval = minimax(g, getPlayerMask(player), depth, -1000, 1000);
+	Eval eval = minimax(g, getPlayerMask(player), depth, -10000, 10000);
 	t = clock() - t;
 	double timeTaken = ((double)t) / CLOCKS_PER_SEC;
 	printf("%ld nodes\t%lf seconds\t%lf nodes/sec\n", nodes, timeTaken, nodes/timeTaken);
@@ -38,6 +38,15 @@ Eval minimax(Game *g, char playerMask, int depth, int alpha, int beta){
 				return e;
 			}
 			Eval testBranch = minimax(g, GAME_PW_MASK, depth-1, alpha, beta);
+			if ( testBranch.eval >= beta ){
+				// alpha beta prune
+				testBranch.sq = moves[i];
+				undo(g);
+				return testBranch;
+			}
+			if ( testBranch.eval > alpha ){
+				alpha = testBranch.eval;
+			}
 			if(testBranch.eval > bestBranch.eval){
 				bestBranch.eval = testBranch.eval;
 				bestBranch.sq = moves[i];
@@ -57,6 +66,14 @@ Eval minimax(Game *g, char playerMask, int depth, int alpha, int beta){
 				return e;
 			}
 			Eval testBranch = minimax(g, GAME_PB_MASK, depth-1, alpha, beta);
+			if ( testBranch.eval <= alpha ){
+				testBranch.sq = moves[i];
+				undo(g);
+				return testBranch;
+			}
+			if ( testBranch.eval < beta ){
+				beta = testBranch.eval;
+			}
 			if(testBranch.eval < bestBranch.eval){
 				bestBranch.eval = testBranch.eval;
 				bestBranch.sq = moves[i];
