@@ -1,22 +1,22 @@
 #include "pfgame.h"
-#include "pfai.h"
+//#include "pfai.h"
 #include <stdio.h>
 #include <unistd.h>
 
 
-void initTestGame (Game*g){
+/*void initTestGame (Game*g){
 	playPlayer(g, 8, 8, GAME_PLAYER_B);
 	playPlayer(g, 8, 7, GAME_PLAYER_B);
 	playPlayer(g, 8, 6, GAME_PLAYER_B);
 	playPlayer(g, 9, 8, GAME_PLAYER_W);
 	playPlayer(g, 9, 7, GAME_PLAYER_W);
 }
-
+*/
 int main(int argc, char *argv[]){
-	Game g;
-	initGame(&g);
+	//Game g;
+	//initGame(&g);
 	//initTestGame(&g);
-	Player_t player = GAME_PLAYER_B;
+	//Player_t player = GAME_PLAYER_B;
 	
 /*	while(1){
 		printFrame(&g);
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]){
 		player = getOpp(player);
 	}*/
 
-	while(1){
+/*	while(1){
 	//	printFullBoard(&g);
 		printFrame(&g);
 		int test = 0 ;
@@ -63,5 +63,5 @@ int main(int argc, char *argv[]){
 			break;
 		}
 	}
-	printBoard(&g);
+	printBoard(&g);*/
 }
