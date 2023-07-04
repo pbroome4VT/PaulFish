@@ -3,8 +3,10 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#define GAME_MAX_MOVES (371)
 
+
+#define GAME_MAX_MOVES (371)
+#define BB_BITS (448)		//7*64
 
 /*======================================
 			Game types
@@ -18,7 +20,7 @@ enum PlayerEnum {BLACK = 0, WHITE = 1};
 
 typedef struct BitboardStruct Bitboard;
 struct BitboardStruct{
-	uint64_t bbChunks[7];
+	uint64_t bitChunk[7];
 };
 
 
@@ -27,182 +29,41 @@ typedef struct GameStruct Game;
 struct GameStruct{
 	// state variables
 	char captures [2];		/* all bitboard indexed by Player_t. example horzBB[BLACK] */
-	Bitboard rankBb[2];
-	Bitboard filesBb[2];
-	Bitboard diag1Bb[2]; /* /  */
-	Bitboard diag2Bb[2]; /*  \  */
-	Bitboard rankChebyshev1Bb;		
-	Bitboard rankChebyshev2Bb;
+	Bitboard occupancies[2];
+
 };
 
 
+int g_numMoves;
+Game g_game[GAME_MAX_MOVES];
+
+
+/*=====================================================
+
+				Precalculated Tables
+
+=======================================================*/
+Bitboard bitIndexSetTable[BB_BITS];
+Bitboard bitIndexUnsetTable[BB_BITS];
 
 
 
-/*======================================
-		Precomputed Lookup Tables
-========================================*/
+/*=====================================================
 
-/* conversions from [rank][file] points to bitboard coordinates of chunks and indices */
-int pntToRankBbChunk[20][20];
-int pntToRankBbIndex[20][20];
+				init functions
 
-int pntToFileBbChunk[20][20];
-int pntToFileBbIndex[20][20];
-
-int pntToDiag1BbChunk[20][20];
-int pntToDiag1BbIndex[20][20];
-
-int pntToDiag2BbChunk[20][20];
-int pntToDiag2BbIndex[20][20];
-
-
-/* conversions from [chunk][index] bitboard coordinates to ranks and files */
-int rankBbPntToRank[7][64];
-int rankBbPntToFile[7][64];
-
-int fileBbPntToRank[7][64];
-int fileBbpntToFile[7][64];
-
-int diag1BbPntToRank[7][64];
-int diag1BbPntToFile[7][64];
-
-int diag2BbPntToRank[7][64];
-int diag2BbPntToFile[7][64];
-
-/* precomputed rank (chunk,index) to rankChebychev1Bb */
-//Bitboard rankBbPntToChebyshevBb[7][64];
-
-
-
-
-/*======================================
-		    Helper Functions
-========================================*/		
-
-#define setBit(bbChunk, index)		(bbChunk |= 1ULL<<index)
-#define getBit(bbChunk, index)		(bbChunk &= 1ULL<<index)
-#define popBit(bbChunk, index)		(getBit(bbChunk, index) ? bbChunk ^= (1ULL<<index) : 0)
-int getLS1B(uint64_t bb);
-
-
-
-/*===================================
-			Global Vars
-====================================*/
- int g_numMoves;
- Game g_game[GAME_MAX_MOVES+1];
-
-
-
-/*==================================
-
-			Init Functions
-
-===================================*/
-
-void initPntToRankBbChunkTable(){
-	for (int rank = 0; rank <= 19; rank++){
-		for (int file = 0; file <= 19; file++){
-			pntToRankBbChunk[rank][file] =  rank / 3;
-		}
+=======================================================*/
+void initBitIndexSetTable(){
+	for(int i = 0; i < BB_BITS; i++){
+		int chunk = i/64;
+		int index = i%64;
+		bitIndexSetTable[i].bitChunk[chunk] = 1ULL << index;
 	}
 }
 
-void initPntToFileBbChunkTable(){
-	for (int rank = 0; rank <= 19; rank++){
-		for (int file = 0; file <= 19; file++){
-			pntToFileBbChunk[rank][file] =  file / 3;
-		}
-	}
-}
-
-
-
-void initPntToDiag1BbChunkTable(){
-	int chunk = 0;
-	int cnt = 0;
-	int diagStartRank;
-	int diagStartFile;
-
-	//count upper triangle chunks
-	diagStartFile = 0;
-	for (diagStartRank = 19; diagStartRank >= 0; diagStartRank--){;
-		int diagLen = 20 - diagStartRank;
-		if (cnt + diagLen >= 64 ){
-			// diag will cause overflow, must add diag to next chunk
-			chunk++;
-			cnt = 0;
-		}
-		//count along diagonal and add them to chunk
-		for(int i = 0; i < diagLen; i++){
-			int rank = diagStartRank + i;
-			int file = diagStartFile + i;
-			pntToDiag1BbChunk[rank][file] = chunk;
-		}
-		cnt += diagLen;
-	}
-
-	//count lower triange chunks
-	diagStartRank = 0;
-	for (diagStartFile = 1; diagStartFile <= 19; diagStartFile++){
-		int diagLen = 20 - diagStartFile;	
-		if (cnt + diagLen >= 64 ){
-			// diag will cause overflow, must add diag to next chunk
-			chunk++;
-			cnt = 0;
-		}
-		//count along diagonal and add them to chunk
-		for(int i = 0; i < diagLen; i++){
-			int rank = diagStartRank + i;
-			int file = diagStartFile + i;
-			pntToDiag1BbChunk[rank][file] = chunk;
-		}
-		cnt += diagLen;
-	}
-}
-
-
-void initPntToDiag2BbChunkTable(){
-	int chunk = 0;
-	int cnt = 0;
-	int diagStartRank;
-	int diagStartFile;
-
-	//count lower triangle chunks
-	diagStartFile = 0;
-	for (diagStartRank = 0; diagStartRank <= 19; diagStartRank++){;
-		int diagLen = diagStartRank + 1;
-		if (cnt + diagLen >= 64 ){
-			// diag will cause overflow, must add diag to next chunk
-			chunk++;
-			cnt = 0;
-		}
-		//count along diagonal and add them to chunk
-		for(int i = 0; i < diagLen; i++){
-			int rank = diagStartRank - i;
-			int file = diagStartFile + i;
-			pntToDiag2BbChunk[rank][file] = chunk;
-		}
-		cnt += diagLen;
-	}
-
-	//count upper triange chunks
-	diagStartRank = 19;
-	for (diagStartFile = 1; diagStartFile <= 19; diagStartFile++){
-		int diagLen = 20 - diagStartFile;	
-		if (cnt + diagLen >= 64 ){
-			// diag will cause overflow, must add diag to next chunk
-			chunk++;
-			cnt = 0;
-		}
-		//count along diagonal and add them to chunk
-		for(int i = 0; i < diagLen; i++){
-			int rank = diagStartRank - i;
-			int file = diagStartFile + i;
-			pntToDiag2BbChunk[rank][file] = chunk;
-		}
-		cnt += diagLen;
+void initBitIndexUnsetTable(){
+	for (int i = 0; i < BB_BITS; i++){
+	
 	}
 }
 
@@ -210,13 +71,206 @@ void initPntToDiag2BbChunkTable(){
 void initGame(){
 	g_numMoves = 0;
 	memset(g_game, 0, sizeof(g_game));
-	initPntToRankBbChunkTable();
-	initPntToFileBbChunkTable();
-	initPntToDiag1BbChunkTable();
-	initPntToDiag2BbChunkTable();
+	initBitIndexSetTable();
 }
 
 
+
+/*=====================================================
+
+				Bitboard Functions
+
+=======================================================*/
+
+Bitboard bbAnd(Bitboard bb1, Bitboard bb2){
+	Bitboard b;
+	b.bitChunk[0] = bb1.bitChunk[0] & bb2.bitChunk[0];
+	b.bitChunk[1] = bb1.bitChunk[1] & bb2.bitChunk[1];
+	b.bitChunk[2] = bb1.bitChunk[2] & bb2.bitChunk[2];
+	b.bitChunk[3] = bb1.bitChunk[3] & bb2.bitChunk[3];
+	b.bitChunk[4] = bb1.bitChunk[4] & bb2.bitChunk[4];
+	b.bitChunk[5] = bb1.bitChunk[5] & bb2.bitChunk[5];
+	b.bitChunk[6] = bb1.bitChunk[6] & bb2.bitChunk[6];
+	return b;
+}
+
+Bitboard bbOr(Bitboard bb1, Bitboard bb2){
+	Bitboard b;
+	b.bitChunk[0] = bb1.bitChunk[0] | bb2.bitChunk[0];
+	b.bitChunk[1] = bb1.bitChunk[1] | bb2.bitChunk[1];
+	b.bitChunk[2] = bb1.bitChunk[2] | bb2.bitChunk[2];
+	b.bitChunk[3] = bb1.bitChunk[3] | bb2.bitChunk[3];
+	b.bitChunk[4] = bb1.bitChunk[4] | bb2.bitChunk[4];
+	b.bitChunk[5] = bb1.bitChunk[5] | bb2.bitChunk[5];
+	b.bitChunk[6] = bb1.bitChunk[6] | bb2.bitChunk[6];
+	return b;
+}
+
+Bitboard bbXor(Bitboard bb1, Bitboard bb2){
+	Bitboard b;
+	b.bitChunk[0] = bb1.bitChunk[0] ^ bb2.bitChunk[0];
+	b.bitChunk[1] = bb1.bitChunk[1] ^ bb2.bitChunk[1];
+	b.bitChunk[2] = bb1.bitChunk[2] ^ bb2.bitChunk[2];
+	b.bitChunk[3] = bb1.bitChunk[3] ^ bb2.bitChunk[3];
+	b.bitChunk[4] = bb1.bitChunk[4] ^ bb2.bitChunk[4];
+	b.bitChunk[5] = bb1.bitChunk[5] ^ bb2.bitChunk[5];
+	b.bitChunk[6] = bb1.bitChunk[6] ^ bb2.bitChunk[6];
+	return b;
+}
+
+Bitboard bbRsh(Bitboard bb, int n){
+	Bitboard b = bb;
+	for (int i = 0; i < n; i++){	
+		b.bitChunk[0] = ( b.bitChunk[1] & 1ULL ) ? ( b.bitChunk[0] >> 1 | 0x8000ULL ) : ( b.bitChunk[0] >> 1 );
+		b.bitChunk[1] = ( b.bitChunk[2] & 1ULL ) ? ( b.bitChunk[1] >> 1 | 0x8000ULL ) : ( b.bitChunk[1] >> 1 );
+		b.bitChunk[2] = ( b.bitChunk[3] & 1ULL ) ? ( b.bitChunk[2] >> 1 | 0x8000ULL ) : ( b.bitChunk[2] >> 1 );
+		b.bitChunk[3] = ( b.bitChunk[4] & 1ULL ) ? ( b.bitChunk[3] >> 1 | 0x8000ULL ) : ( b.bitChunk[3] >> 1 );
+		b.bitChunk[4] = ( b.bitChunk[5] & 1ULL ) ? ( b.bitChunk[4] >> 1 | 0x8000ULL ) : ( b.bitChunk[4] >> 1 );
+		b.bitChunk[5] = ( b.bitChunk[6] & 1ULL ) ? ( b.bitChunk[5] >> 1 | 0x8000ULL ) : ( b.bitChunk[5] >> 1 );
+		b.bitChunk[6] = ( b.bitChunk[6] >> 1 );
+	}
+	return b;
+}
+
+int bbNz(Bitboard bb){
+	return bb.bitChunk[0] || bb.bitChunk[1] || bb.bitChunk[2] || bb.bitChunk[3] || bb.bitChunk[4] || bb.bitChunk[5] || bb.bitChunk[6];
+}
+
+
+#define setBit(bb, index)		((bb) = bbOr((bb), bitIndexSetTable[(index)]))
+#define unsetBit(bb, index)		((bb) = bbAnd((bb), bitIndexUnsetTable[(index)]))
+#define getBit(bb, index) 		(bbNz(bbAnd((bb), bitIndexSetTable[(index)])))
+
+/*=====================================================
+
+				Helper functions
+
+=======================================================*/
+#define pntToBit(rank,file)    		((rank) * 20 + (file))
+#define getOpp(player)  			(player ? BLACK : WHITE)
+#define playerGetOcc(bit, player)	(getBit(g_game[g_numMoves].occupancies[(player)], (bit)))
+#define playerSetOcc(bit, player)	(setBit(g_game[g_numMoves].occupancies[(player)], (bit)))
+
+/*=====================================================
+
+				Game functions
+
+=======================================================*/
+int makeCaptures(int bitIndex, Player_t player){
+	Player_t opp = getOpp(player);
+	//check right
+	if( playerGetOcc(bitIndex+1, opp) &&
+		playerGetOcc(bitIndex+2, opp) &&
+		playerGetOcc(bitIndex+3, player))
+	{
+		
+	}
+}
+
+int isConnect5(int bitIndex, Player_t player){
+	int streak;
+	
+	//check rank
+	streak = 1;
+	for(int i = 1; i < 5; i++){
+		int offset = 1;
+		int bit = bitIndex + i * offset;
+		if(getBit( g_game[g_numMoves].occupancies[player], bit )){
+			streak++;
+		}else{
+			break;
+		}
+	}
+	for(int i = 1; i < 5; i++){
+		int offset = -1;
+		int bit = bitIndex + i * offset;
+		if(bitIndex >= 0 && getBit( g_game[g_numMoves].occupancies[player], bit )){
+			streak++;
+		}else{
+			break;
+		}
+	}
+	if(streak >= 5){
+		return 1;
+	}
+	//check diag1
+	streak = 1;
+	for(int i = 1; i < 5; i++){
+		int offset = 21;
+		int bit = bitIndex + i * offset;
+		if(getBit( g_game[g_numMoves].occupancies[player], bit )){
+			streak++;
+		}else{
+			break;
+		}
+	}
+	for(int i = 1; i < 5; i++){
+		int offset = -21;
+		int bit = bitIndex + i * offset;
+		if(bitIndex >= 0 && getBit( g_game[g_numMoves].occupancies[player], bit )){
+			streak++;
+		}else{
+			break;
+		}
+	}
+	if(streak >= 5){
+		return 1;
+	}
+	//check file
+	streak = 1;
+	for(int i = 1; i < 5; i++){
+		int offset = 20;
+		int bit = bitIndex + i * offset;
+		if(getBit( g_game[g_numMoves].occupancies[player], bit )){
+			streak++;
+		}else{
+			break;
+		}
+	}
+	for(int i = 1; i < 5; i++){
+		int offset = -20;
+		int bit = bitIndex + i * offset;
+		if(bitIndex >= 0 && getBit( g_game[g_numMoves].occupancies[player], bit )){
+			streak++;
+		}else{
+			break;
+		}
+	}
+	if(streak >= 5){
+		return 1;
+	}
+	//check diag2
+	streak = 1;
+	for(int i = 1; i < 5; i++){
+		int offset = 19;
+		int bit = bitIndex + i * offset;
+		if(getBit( g_game[g_numMoves].occupancies[player], bit )){
+			streak++;
+		}else{
+			break;
+		}
+	}
+	for(int i = 1; i < 5; i++){
+		int offset = -19;
+		int bit = bitIndex + i * offset;
+		if(bitIndex >= 0 && getBit( g_game[g_numMoves].occupancies[player], bit )){
+			streak++;
+		}else{
+			break;
+		}
+	}
+	if(streak >= 5){
+		return 1;
+	}
+	return 0;
+}
+
+
+void play(int bitIndex, Player_t player){
+	g_numMoves++;
+	memcpy( g_game + g_numMoves, g_game + g_numMoves - 1, sizeof(*g_game));
+	setBit( g_game[g_numMoves].occupancies[player], bitIndex );
+}
 
 /*=====================================================
 
@@ -224,51 +278,78 @@ void initGame(){
 
 =======================================================*/
 
+
+void printBbString(Bitboard b){
+	for(int i = BB_BITS-1; i > 0; i--){
+		if (i%8 == 0){
+			printf(" ");
+		}
+		printf("%d", getBit(b, i));
+	}
+}
+
+void printGame(){
+	for(int rank = 18; rank >= 0; rank--){
+		printf("%2d  ", rank);
+		for(int file = 0; file <= 18; file++){
+			int bitIndex = pntToBit(rank,file);
+			char c;
+			if(getBit(g_game[g_numMoves].occupancies[BLACK], bitIndex)){
+				c = 'B';
+			}else if (getBit(g_game[g_numMoves].occupancies[WHITE], bitIndex)){
+				c = 'W';
+			}else{
+				c = '*';
+			}
+			printf("%c ", c);
+		}
+		printf("\n");
+	}
+	printf("    ");
+	for(int file = 0; file <= 18; file++){
+		printf("%c ", 'a' + file);
+	}
+	printf("\n");
+}
+
 void printTable(int *arr, int rows, int cols){
 	for(int i = rows - 1; i >= 0; i--){
 		for(int k = 0; k < cols; k++){
-			printf("%d ", *(arr+rows*i+k));
+			printf("%2d ", *(arr+rows*i+k));
 		}
 		printf("\n");
 	}
 	printf("\n");
 }
-
-void printRankBb(Bitboard rankBb){
-	for (int rank = 19; rank >= 0; rank--){
-		printf("%2d ", rank);
-		for(int file = 0; file <= 19; file++){	
-			int chunk = pntToRankBbChunk[rank][file];
-			int index = pntToRankBbIndex[rank][file];
-			int bit = getBit(rankBb.bbChunks[chunk], index);
-			printf("%d ", bit); 
-		}
-		printf("\n");
-	}	
-	printf("   ");
-	for (int file = 0; file <=19; file++){
-		printf("%c ", file + 'a');
-	}
-	printf("\n");
-}
-
 
 /*====================================================
 					main stuff
 ====================================================*/
-
-void printPrecalcs(){
-	printf("pntToRankBbChunk\n");
-	printTable((int *)pntToRankBbChunk, 20, 20);
-	printf("pntToFileBbChunk\n");
-	printTable((int *)pntToFileBbChunk, 20, 20);
-	printf("pntToDiag1BbChunk\n");
-	printTable((int *)pntToDiag1BbChunk, 20, 20);
-	printf("pntToDiag2BbChunk\n");
-	printTable((int *)pntToDiag2BbChunk, 20, 20);
+int testGame(){
+	play(0, BLACK);
+	play(20, BLACK);
+	play(40,BLACK);
+	play(60, BLACK);
 }
 
-int main(){
-	initGame ();
-	printPrecalcs();
+
+int main(){	
+	initGame();
+	testGame();
+	Player_t player = BLACK;
+	int rank, file;
+	while(1){
+		printGame();
+		scanf("%d%d", &file, &rank);
+		while (getchar() != '\n'){};
+		int bit = pntToBit(rank,file);
+		play(bit, player);
+		if(isConnect5(bit, player)){
+			printf("GAME OVER\n");
+			break;
+		}
+		player = getOpp(player);
+	}
+	printGame();
+
 }
