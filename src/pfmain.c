@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-
+#include <time.h>
 
 #define GAME_MAX_MOVES (371)
 #define BB_BITS (448)		//7*64
@@ -487,6 +487,7 @@ struct EvalStruct{
 };
 
 
+long int g_nodes;	
 Eval minimax(Player_t player, int depth, int alpha, int beta){
 	Eval e;
 	if(depth){
@@ -536,6 +537,7 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 			return e;
 		}
 	}
+	g_nodes++;
 	e.score = 0;
 	e.move = -1;
 	return e;
@@ -543,7 +545,13 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 
 
 Eval compute(Player_t player, int depth){
-
+	g_nodes = 0;
+	clock_t t = clock();
+	Eval e = minimax(player, depth, 0 , 0);
+	t = clock() - t;
+	double timeTaken = (double)t / CLOCKS_PER_SEC;
+	printf("%ld nodes\t%lf seconds\t%lf nodes/sec\n", g_nodes, timeTaken, g_nodes/timeTaken);
+	return e;
 }
 
 
@@ -657,7 +665,7 @@ int main(){
 			break;
 		}
 		printGame();
-		Eval e = minimax(WHITE, 3, 0, 0);
+		Eval e = compute(WHITE, 3);
 		printf("score %d\tmove%d\n", e.score, e.move);
 		play(e.move, WHITE);
 		if(isConnect5(bit, BLACK)){
