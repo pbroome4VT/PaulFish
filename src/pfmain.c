@@ -30,7 +30,8 @@ struct GameStruct{
 	// state variables
 	char captures [2];		/* all bitboard indexed by Player_t. example horzBB[BLACK] */
 	Bitboard occupancies[2];
-
+	Bitboard star1Occupancies;
+	Bitboard star2Occupanceis;
 };
 
 
@@ -40,38 +41,128 @@ Game g_game[GAME_MAX_MOVES];
 
 /*=====================================================
 
-				Precalculated Tables
+				Precalculated Tables/bitboards
 
 =======================================================*/
-Bitboard bitIndexSetTable[BB_BITS];
-Bitboard bitIndexUnsetTable[BB_BITS];
 int bitToChunkTable[BB_BITS];
 int bitToChunkIndexTable[BB_BITS];
 
+Bitboard inBoundsMask;
+Bitboard star1MaskTable[BB_BITS];
+Bitboard star2MaskTable[BB_BITS];
 
+
+
+/*=====================================================
+
+				Bitboard Functions
+
+=======================================================*/
+
+Bitboard *bbAnd(Bitboard *bb1, Bitboard *bb2){
+	bb1->bitChunk[0] &= bb2->bitChunk[0];
+	bb1->bitChunk[1] &= bb2->bitChunk[1];
+	bb1->bitChunk[2] &= bb2->bitChunk[2];
+	bb1->bitChunk[3] &= bb2->bitChunk[3];
+	bb1->bitChunk[4] &= bb2->bitChunk[4];
+	bb1->bitChunk[5] &= bb2->bitChunk[5];
+	bb1->bitChunk[6] &= bb2->bitChunk[6];
+	return bb1;
+}
+
+Bitboard *bbOr(Bitboard *bb1, Bitboard *bb2){
+	bb1->bitChunk[0] |= bb2->bitChunk[0];
+	bb1->bitChunk[1] |= bb2->bitChunk[1];
+	bb1->bitChunk[2] |= bb2->bitChunk[2];
+	bb1->bitChunk[3] |= bb2->bitChunk[3];
+	bb1->bitChunk[4] |= bb2->bitChunk[4];
+	bb1->bitChunk[5] |= bb2->bitChunk[5];
+	bb1->bitChunk[6] |= bb2->bitChunk[6];
+	return bb1;
+}
+
+Bitboard *bbXor(Bitboard *bb1, Bitboard *bb2){
+	bb1->bitChunk[0] ^= bb2->bitChunk[0];
+	bb1->bitChunk[1] ^= bb2->bitChunk[1];
+	bb1->bitChunk[2] ^= bb2->bitChunk[2];
+	bb1->bitChunk[3] ^= bb2->bitChunk[3];
+	bb1->bitChunk[4] ^= bb2->bitChunk[4];
+	bb1->bitChunk[5] ^= bb2->bitChunk[5];
+	bb1->bitChunk[6] ^= bb2->bitChunk[6];
+	return bb1;
+}
+
+Bitboard *bbInv(Bitboard *bb){
+	bb->bitChunk[0] = ~(bb->bitChunk[0]);
+	bb->bitChunk[1] = ~(bb->bitChunk[1]);
+	bb->bitChunk[2] = ~(bb->bitChunk[2]);
+	bb->bitChunk[3] = ~(bb->bitChunk[3]);
+	bb->bitChunk[4] = ~(bb->bitChunk[4]);
+	bb->bitChunk[5] = ~(bb->bitChunk[5]);
+	bb->bitChunk[6] = ~(bb->bitChunk[6]);
+}
+
+Bitboard *bbRsh(Bitboard *bb, int n){
+	for (int i = 0; i < n; i++){	
+		bb->bitChunk[0] = ( bb->bitChunk[1] & 1ULL ) ? ( bb->bitChunk[0] >> 1 | 0x8000ULL ) : ( bb->bitChunk[0] >> 1 );
+		bb->bitChunk[1] = ( bb->bitChunk[2] & 1ULL ) ? ( bb->bitChunk[1] >> 1 | 0x8000ULL ) : ( bb->bitChunk[1] >> 1 );
+		bb->bitChunk[2] = ( bb->bitChunk[3] & 1ULL ) ? ( bb->bitChunk[2] >> 1 | 0x8000ULL ) : ( bb->bitChunk[2] >> 1 );
+		bb->bitChunk[3] = ( bb->bitChunk[4] & 1ULL ) ? ( bb->bitChunk[3] >> 1 | 0x8000ULL ) : ( bb->bitChunk[3] >> 1 );
+		bb->bitChunk[4] = ( bb->bitChunk[5] & 1ULL ) ? ( bb->bitChunk[4] >> 1 | 0x8000ULL ) : ( bb->bitChunk[4] >> 1 );
+		bb->bitChunk[5] = ( bb->bitChunk[6] & 1ULL ) ? ( bb->bitChunk[5] >> 1 | 0x8000ULL ) : ( bb->bitChunk[5] >> 1 );
+		bb->bitChunk[6] = ( bb->bitChunk[6] >> 1 );
+	}
+	return bb;
+}
+
+int u64ToLS1BIndex(uint64_t x){
+	int i = 0;
+	x = ~x;
+	while( x & 1ULL){
+		x = x >> 1;
+		i++;
+	}
+	return i;
+}
+
+int bbGetLS1B(Bitboard *b){
+	if(b->bitChunk[0]){ return u64ToLS1BIndex(b->bitChunk[0]); }
+	if(b->bitChunk[1]){ return 64 + u64ToLS1BIndex(b->bitChunk[1]); }
+	if(b->bitChunk[2]){ return 128 + u64ToLS1BIndex(b->bitChunk[2]); }
+	if(b->bitChunk[3]){ return 192 + u64ToLS1BIndex(b->bitChunk[3]); }
+	if(b->bitChunk[4]){ return 256 + u64ToLS1BIndex(b->bitChunk[4]); }
+	if(b->bitChunk[5]){ return 320 + u64ToLS1BIndex(b->bitChunk[5]); }
+	if(b->bitChunk[6]){ return 384 + u64ToLS1BIndex(b->bitChunk[6]); }
+	return -1;
+}
+
+
+int bbNz(Bitboard *bb){
+	return bb->bitChunk[0] || bb->bitChunk[1] || bb->bitChunk[2] || bb->bitChunk[3] || bb->bitChunk[4] || bb->bitChunk[5] || bb->bitChunk[6];
+}
+
+Bitboard *setBit(Bitboard *bb, int bit){
+	bb->bitChunk[bitToChunkTable[bit]] |= (1ULL << bitToChunkIndexTable[bit]);
+	return bb;
+}
+
+Bitboard *unsetBit(Bitboard *bb, int bit){
+	bb->bitChunk[bitToChunkTable[bit]] &= ~(1ULL << bitToChunkIndexTable[bit]);
+	return bb;
+}
+int getBit(Bitboard *bb, int bit){
+	return bb->bitChunk[bitToChunkTable[bit]] & (1ULL << bitToChunkIndexTable[bit])   ? 1:0;
+}
+
+int pntToBit(int rank, int file){
+	return rank * 20 + file;
+}
 /*=====================================================
 
 				init functions
 
 =======================================================*/
-void initBitIndexSetTable(){
-	for(int i = 0; i < BB_BITS; i++){
-		int chunk = i/64;
-		int index = i%64;
-		bitIndexSetTable[i].bitChunk[chunk] = 1ULL << index;
-	}
-}
 
-void initBitIndexUnsetTable(){
-	for( int i = 0; i < BB_BITS; i++){
-		int chunk = i/64;
-		int index = i%64;
-		Bitboard b;
-		memset(&b, 0xFF, sizeof(b));
-		b.bitChunk[chunk] ^= (1ULL << index);
-		bitIndexUnsetTable[i] = b;
-	}
-}
 
 void initBitToChunkTable(){
 	for(int i = 0; i < BB_BITS; i++){
@@ -85,109 +176,81 @@ void initBitToChunkIndexTable(){
 	}
 }
 
+void initInBoundsMask(){
+	memset(&inBoundsMask, 0, sizeof(Bitboard));
+	for( int rank = 0; rank <= 19; rank++){
+		for (int file = 0; file <= 19; file++){
+			if(rank < 19 && file < 19){
+				int bit = pntToBit(rank, file);
+				setBit(&inBoundsMask, bit);
+			}
+		}
+	}
+}
+
+void initStarMaskTables(){
+	for (int rank = 0; rank <= 19; rank++){
+		for (int file = 0; file <= 19; file++){
+			int tableIndex = pntToBit(rank,file);
+			if(getBit(&inBoundsMask, tableIndex) == 0){continue;} //boundary bits in table
+			for(int rankDir = -1; rankDir <= 1; rankDir++){
+				for(int fileDir = -1; fileDir <= 1; fileDir++){
+					int bitOffset = pntToBit(rankDir, fileDir);
+					int bit = tableIndex + bitOffset;
+					if(bit >= 0 && bit < BB_BITS && getBit(&inBoundsMask, bit)){
+						setBit(&star1MaskTable[tableIndex], bit);
+						setBit(&star2MaskTable[tableIndex], bit);
+						bit = tableIndex + 2*bitOffset;
+						if (bit >= 0 && bit < BB_BITS && getBit(&inBoundsMask, bit)){
+							setBit(&star2MaskTable[tableIndex], bit);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
 void initGame(){
 	g_numMoves = 0;
 	memset(g_game, 0, sizeof(g_game));
-	initBitIndexSetTable();
-	initBitIndexUnsetTable();
+	//initBitIndexSetTable();
+	//initBitIndexUnsetTable();
 	initBitToChunkTable();
 	initBitToChunkIndexTable();
+	initInBoundsMask();
+	initStarMaskTables();
 }
 
-
-
-/*=====================================================
-
-				Bitboard Functions
-
-=======================================================*/
-
-Bitboard bbAnd(Bitboard bb1, Bitboard bb2){
-	bb1.bitChunk[0] &= bb2.bitChunk[0];
-	bb1.bitChunk[1] &= bb2.bitChunk[1];
-	bb1.bitChunk[2] &= bb2.bitChunk[2];
-	bb1.bitChunk[3] &= bb2.bitChunk[3];
-	bb1.bitChunk[4] &= bb2.bitChunk[4];
-	bb1.bitChunk[5] &= bb2.bitChunk[5];
-	bb1.bitChunk[6] &= bb2.bitChunk[6];
-	return bb1;
-}
-
-Bitboard bbOr(Bitboard bb1, Bitboard bb2){
-	bb1.bitChunk[0] |= bb2.bitChunk[0];
-	bb1.bitChunk[1] |= bb2.bitChunk[1];
-	bb1.bitChunk[2] |= bb2.bitChunk[2];
-	bb1.bitChunk[3] |= bb2.bitChunk[3];
-	bb1.bitChunk[4] |= bb2.bitChunk[4];
-	bb1.bitChunk[5] |= bb2.bitChunk[5];
-	bb1.bitChunk[6] |= bb2.bitChunk[6];
-	return bb1;
-}
-
-Bitboard bbXor(Bitboard bb1, Bitboard bb2){
-	bb1.bitChunk[0] ^= bb2.bitChunk[0];
-	bb1.bitChunk[1] ^= bb2.bitChunk[1];
-	bb1.bitChunk[2] ^= bb2.bitChunk[2];
-	bb1.bitChunk[3] ^= bb2.bitChunk[3];
-	bb1.bitChunk[4] ^= bb2.bitChunk[4];
-	bb1.bitChunk[5] ^= bb2.bitChunk[5];
-	bb1.bitChunk[6] ^= bb2.bitChunk[6];
-	return bb1;
-}
-
-Bitboard bbRsh(Bitboard bb, int n){
-	for (int i = 0; i < n; i++){	
-		bb.bitChunk[0] = ( bb.bitChunk[1] & 1ULL ) ? ( bb.bitChunk[0] >> 1 | 0x8000ULL ) : ( bb.bitChunk[0] >> 1 );
-		bb.bitChunk[1] = ( bb.bitChunk[2] & 1ULL ) ? ( bb.bitChunk[1] >> 1 | 0x8000ULL ) : ( bb.bitChunk[1] >> 1 );
-		bb.bitChunk[2] = ( bb.bitChunk[3] & 1ULL ) ? ( bb.bitChunk[2] >> 1 | 0x8000ULL ) : ( bb.bitChunk[2] >> 1 );
-		bb.bitChunk[3] = ( bb.bitChunk[4] & 1ULL ) ? ( bb.bitChunk[3] >> 1 | 0x8000ULL ) : ( bb.bitChunk[3] >> 1 );
-		bb.bitChunk[4] = ( bb.bitChunk[5] & 1ULL ) ? ( bb.bitChunk[4] >> 1 | 0x8000ULL ) : ( bb.bitChunk[4] >> 1 );
-		bb.bitChunk[5] = ( bb.bitChunk[6] & 1ULL ) ? ( bb.bitChunk[5] >> 1 | 0x8000ULL ) : ( bb.bitChunk[5] >> 1 );
-		bb.bitChunk[6] = ( bb.bitChunk[6] >> 1 );
-	}
-	return bb;
-}
-
-int bbNz(Bitboard bb){
-	return bb.bitChunk[0] || bb.bitChunk[1] || bb.bitChunk[2] || bb.bitChunk[3] || bb.bitChunk[4] || bb.bitChunk[5] || bb.bitChunk[6];
-}
-
-Bitboard setBit(Bitboard bb, int bit){
-	bb.bitChunk[bitToChunkTable[bit]] |= (1ULL << bitToChunkIndexTable[bit]);
-	return bb;
-}
-i
-Bitboard unsetBit(Bitboard *bb, int bit){
-	bb.bitChunk[bitToChunkTable[bit]] &= ~(1ULL << bitToChunkIndexTable[bit]);
-	returb bb;
-}
-int getBit(Bitboard bb, int bit){
-	return bb.bitChunk[bitToChunkTable[bit]] & (1ULL << bitToChunkIndexTable[bit])   ? 1:0;
-}
 
 /*=====================================================
 
 				Helper functions
 
 =======================================================*/
-int pntToBit(int rank, int file){
-	return rank * 20 + file;
-}
 
 Player_t getOpp(Player_t player){
 	return player ? BLACK : WHITE;
 }
 
 int playerGetOcc(int bit, Player_t player){
-	return getBit(g_game[g_numMoves].occupancies[player], bit);
+	return getBit(&(g_game[g_numMoves].occupancies[player]), bit);
 }
 
 void playerSetOcc(int bit, Player_t player){
-	setBit(g_game[g_numMoves].occupancies[player], bit);
+	setBit(&(g_game[g_numMoves].occupancies[player]), bit);
 }
 
 void playerUnsetOcc(int bit, Player_t player){
-	unsetBit(g_game[g_numMoves].occupancies[player], bit);
+	unsetBit(&(g_game[g_numMoves].occupancies[player]), bit);
+}
+
+int playerGetCaps(Player_t player){
+	return g_game[g_numMoves].captures[player];
+}
+void playerAddCaps(int caps, Player_t player){
+	g_game[g_numMoves].captures[player] += caps;
 }
 
 /*=====================================================
@@ -195,15 +258,86 @@ void playerUnsetOcc(int bit, Player_t player){
 				Game functions
 
 =======================================================*/
-int makeCaptures(int bitIndex, Player_t player){
+int makeCaptures(int bit, Player_t player){
+	int numCaps = 0;
 	Player_t opp = getOpp(player);
-	//check right
-	if( playerGetOcc(bitIndex+1, opp) &&
-		playerGetOcc(bitIndex+2, opp) &&
-		playerGetOcc(bitIndex+3, player))
+	//E
+	if( playerGetOcc(bit+1, opp) &&
+		playerGetOcc(bit+2, opp) &&
+		playerGetOcc(bit+3, player))
 	{
-		printf("capture\n");	
+		numCaps++;
+		playerUnsetOcc(bit+1, opp);
+		playerUnsetOcc(bit+2, opp);
 	}
+	//NE 
+	if( playerGetOcc(bit+21, opp) &&
+		playerGetOcc(bit+42, opp) &&
+		playerGetOcc(bit+63, player))
+	{
+		numCaps++;
+		playerUnsetOcc(bit+21, opp);
+		playerUnsetOcc(bit+42, opp);
+	}
+	//N
+	if( playerGetOcc(bit+20, opp) &&
+		playerGetOcc(bit+40, opp) &&
+		playerGetOcc(bit+60, player))
+	{
+		numCaps++;
+		playerUnsetOcc(bit+20, opp);
+		playerUnsetOcc(bit+40, opp);
+	}
+	//NW
+	if( playerGetOcc(bit+19, opp) &&
+		playerGetOcc(bit+38, opp) &&
+		playerGetOcc(bit+57, player))
+	{
+		numCaps++;
+		playerUnsetOcc(bit+19, opp);
+		playerUnsetOcc(bit+38, opp);
+	}
+	//W
+	if( bit - 3 >= 0 &&
+		playerGetOcc(bit-1, opp) &&
+		playerGetOcc(bit-2, opp) &&
+		playerGetOcc(bit-3, player))
+	{
+		numCaps++;
+		playerUnsetOcc(bit-1, opp);
+		playerUnsetOcc(bit-22, opp);
+	}
+	// SW
+	if( bit-63 >= 0 &&
+		playerGetOcc(bit-21, opp) &&
+		playerGetOcc(bit-42, opp) &&
+		playerGetOcc(bit-63, player))
+	{
+		numCaps++;
+		playerUnsetOcc(bit-21, opp);
+		playerUnsetOcc(bit-42, opp);
+	}
+	// S
+	if( bit - 60 >= 0 &&
+		playerGetOcc(bit-20, opp) &&
+		playerGetOcc(bit-40, opp) &&
+		playerGetOcc(bit-60, player))
+	{
+		numCaps++;
+		playerUnsetOcc(bit-20, opp);
+		playerUnsetOcc(bit-40, opp);
+	}
+	//SE
+	if( bit - 57 > 0 &&
+		playerGetOcc(bit-19, opp) &&
+		playerGetOcc(bit-38, opp) &&
+		playerGetOcc(bit-57, player))
+	{
+		numCaps++;
+		playerUnsetOcc(bit-19, opp);
+		playerUnsetOcc(bit-38, opp);
+	}
+	return numCaps;
 }
 
 int isConnect5(int bitIndex, Player_t player){
@@ -214,7 +348,7 @@ int isConnect5(int bitIndex, Player_t player){
 	for(int i = 1; i < 5; i++){
 		int offset = 1;
 		int bit = bitIndex + i * offset;
-		if(getBit( g_game[g_numMoves].occupancies[player], bit )){
+		if(playerGetOcc(bit, player)){
 			streak++;
 		}else{
 			break;
@@ -223,7 +357,7 @@ int isConnect5(int bitIndex, Player_t player){
 	for(int i = 1; i < 5; i++){
 		int offset = -1;
 		int bit = bitIndex + i * offset;
-		if(bitIndex >= 0 && getBit( g_game[g_numMoves].occupancies[player], bit )){
+		if(bit >= 0 && playerGetOcc(bit, player)){
 			streak++;
 		}else{
 			break;
@@ -237,7 +371,7 @@ int isConnect5(int bitIndex, Player_t player){
 	for(int i = 1; i < 5; i++){
 		int offset = 21;
 		int bit = bitIndex + i * offset;
-		if(getBit( g_game[g_numMoves].occupancies[player], bit )){
+		if(playerGetOcc(bit, player)){
 			streak++;
 		}else{
 			break;
@@ -246,7 +380,7 @@ int isConnect5(int bitIndex, Player_t player){
 	for(int i = 1; i < 5; i++){
 		int offset = -21;
 		int bit = bitIndex + i * offset;
-		if(bitIndex >= 0 && getBit( g_game[g_numMoves].occupancies[player], bit )){
+		if(bit >= 0 && playerGetOcc(bit, player)){
 			streak++;
 		}else{
 			break;
@@ -260,7 +394,7 @@ int isConnect5(int bitIndex, Player_t player){
 	for(int i = 1; i < 5; i++){
 		int offset = 20;
 		int bit = bitIndex + i * offset;
-		if(getBit( g_game[g_numMoves].occupancies[player], bit )){
+		if(playerGetOcc(bit, player)){
 			streak++;
 		}else{
 			break;
@@ -269,7 +403,7 @@ int isConnect5(int bitIndex, Player_t player){
 	for(int i = 1; i < 5; i++){
 		int offset = -20;
 		int bit = bitIndex + i * offset;
-		if(bitIndex >= 0 && getBit( g_game[g_numMoves].occupancies[player], bit )){
+		if(bit >= 0 && playerGetOcc(bit, player)){
 			streak++;
 		}else{
 			break;
@@ -283,7 +417,7 @@ int isConnect5(int bitIndex, Player_t player){
 	for(int i = 1; i < 5; i++){
 		int offset = 19;
 		int bit = bitIndex + i * offset;
-		if(getBit( g_game[g_numMoves].occupancies[player], bit )){
+		if(playerGetOcc(bit, player)){
 			streak++;
 		}else{
 			break;
@@ -292,7 +426,7 @@ int isConnect5(int bitIndex, Player_t player){
 	for(int i = 1; i < 5; i++){
 		int offset = -19;
 		int bit = bitIndex + i * offset;
-		if(bitIndex >= 0 && getBit( g_game[g_numMoves].occupancies[player], bit )){
+		if(bit >= 0 && playerGetOcc(bit, player)){
 			streak++;
 		}else{
 			break;
@@ -305,12 +439,113 @@ int isConnect5(int bitIndex, Player_t player){
 }
 
 
-void play(int bitIndex, Player_t player){
+void play(int bit, Player_t player){
 	g_numMoves++;
 	memcpy( g_game + g_numMoves, g_game + g_numMoves - 1, sizeof(*g_game));
-	setBit( g_game[g_numMoves].occupancies[player], bitIndex );
-	//makeCaptures(bitIndex, player);
+	playerSetOcc(bit, player);
+	playerAddCaps(makeCaptures(bit, player), player);
+	bbOr( &(g_game[g_numMoves].star1Occupancies), &(star1MaskTable[bit]));
 }
+
+void undo(){
+	g_numMoves--;
+}
+
+
+/*=====================================================
+
+				  AI data+functions
+
+=======================================================*/
+
+void playFast(int bit, Player_t player){
+	play(bit, player);
+}
+
+Bitboard getMoves(){
+	Bitboard b;
+	b = g_game[g_numMoves].occupancies[BLACK];
+	bbOr(&b, &(g_game[g_numMoves].occupancies[WHITE]));
+	bbAnd(bbInv(&b), &inBoundsMask);
+	return b;
+}
+
+Bitboard getMovesStar1(){
+	Bitboard b = g_game[g_numMoves].star1Occupancies;
+	bbXor(&b, &(g_game[g_numMoves].occupancies[BLACK]));
+	bbXor(&b, &(g_game[g_numMoves].occupancies[WHITE]));
+	return b;
+}
+
+#define MAXIMIZER BLACK
+#define MINIMIZER WHITE
+
+typedef struct EvalStruct Eval;
+struct EvalStruct{
+	int score;
+	int move;
+};
+
+
+Eval minimax(Player_t player, int depth, int alpha, int beta){
+	Eval e;
+	if(depth){
+		Bitboard moves = getMovesStar1();
+		int move;
+		if(player == MAXIMIZER){
+			// maximizer
+			e.score = -1001;
+			e.move = -1;
+			while ( (move = bbGetLS1B(&moves)) != -1 ){
+				unsetBit(&moves, move);
+				playFast(move, MAXIMIZER);
+				if(isConnect5(move, MAXIMIZER)){
+					e.score = 1000;
+					e.move = move;
+					undo();
+					return e;
+				}
+				Eval tmp = minimax(MINIMIZER, depth - 1, alpha, beta);
+				if(tmp.score > e.score){
+					e.score = tmp.score;
+					e.move = move;
+				}
+				undo();
+			}
+			return e;
+		}else{
+			//minimizer	
+			e.score = 1001;
+			e.move = -1;
+			while ( (move = bbGetLS1B(&moves)) != -1 ){
+				unsetBit(&moves, move);
+				playFast(move, MINIMIZER);
+				if(isConnect5(move, MINIMIZER)){
+					e.score = -1000;
+					e.move = move;
+					undo();
+					return e;
+				}
+				Eval tmp = minimax(MAXIMIZER, depth - 1, alpha, beta);
+				if(tmp.score < e.score){
+					e.score = tmp.score;
+					e.move = move;
+				}
+				undo();
+			}
+			return e;
+		}
+	}
+	e.score = 0;
+	e.move = -1;
+	return e;
+}
+
+
+Eval compute(Player_t player, int depth){
+
+}
+
 
 /*=====================================================
 
@@ -321,7 +556,7 @@ void play(int bitIndex, Player_t player){
 
 void printBbString(Bitboard b){
 	for(int i = BB_BITS-1; i >= 0; i--){	
-		printf("%d", getBit(b, i));
+		printf("%d", getBit(&b, i));
 		if (i%8 == 0){
 			printf(" ");
 		}
@@ -351,6 +586,29 @@ void printGame(){
 		printf("%c ", 'a' + file);
 	}
 	printf("\n");
+	printf("Black Captures %d\t WhiteCaptures %d\n", playerGetCaps(BLACK), playerGetCaps(WHITE));
+}
+
+void printBb(Bitboard bb){
+	for(int rank = 19; rank >= 0; rank--){
+		printf("%2d  ", rank);
+		for(int file = 0; file <= 19; file++){
+			int bit = pntToBit(rank,file);
+			char c;
+			if(getBit(&bb, bit)){
+				c = '1';
+			}else{
+				c = '0';
+			}
+			printf("%c ", c);
+		}
+		printf("\n");
+	}
+	printf("    ");
+	for(int file = 0; file <= 19; file++){
+		printf("%c ", 'a' + file);
+	}
+	printf("\n");
 }
 
 void printTable(int *arr, int rows, int cols){
@@ -367,19 +625,53 @@ void printTable(int *arr, int rows, int cols){
 					main stuff
 ====================================================*/
 int testGame(){
-	play(1, WHITE);
-	play(2, WHITE);
-	play(3, BLACK);
+	play(pntToBit(9,9), WHITE);
+	play(pntToBit(9,10), WHITE);
+	play(pntToBit(9,11), WHITE);
+	play(pntToBit(8,9), BLACK);
+	play(pntToBit(8,10), BLACK);
+	play(pntToBit(8,11), BLACK);
 }
 
 
 int main(){	
 	initGame();
 	testGame();
-	Player_t player = BLACK;
+	/*
+	Bitboard moves = getMoves();
+	int move;
+	while( (move = bbGetLS1B(&moves)) != -1){
+		unsetBit(&moves, move);
+		printf("%d\n", move);
+	}
+	*/
+	int rank, file;	
+	while(1){	
+		printGame();
+		scanf("%d%d", &file, &rank);
+		while (getchar() != '\n'){};
+		int bit = pntToBit(rank,file);
+		play(bit, BLACK);
+		if(isConnect5(bit, BLACK)){
+			printf("GAME OVER\n");
+			break;
+		}
+		printGame();
+		Eval e = minimax(WHITE, 3, 0, 0);
+		printf("score %d\tmove%d\n", e.score, e.move);
+		play(e.move, WHITE);
+		if(isConnect5(bit, BLACK)){
+			printf("GAME OVER\n");
+			break;
+		}
+	}
+	printGame();
+	/*Player_t player = BLACK;
 	int rank, file;
 	while(1){
-		printBbString(g_game[g_numMoves].occupancies[WHITE]);
+		printBb(g_game[g_numMoves].occupancies[BLACK]);
+		printBb(g_game[g_numMoves].occupancies[WHITE]);
+		printBb(getMovesStar1());
 		printGame();
 		scanf("%d%d", &file, &rank);
 		while (getchar() != '\n'){};
@@ -392,5 +684,5 @@ int main(){
 		player = getOpp(player);
 	}
 	printGame();
-
+	*/
 }
