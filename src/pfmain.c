@@ -46,7 +46,8 @@ Game g_game[GAME_MAX_MOVES];
 =======================================================*/
 int bitToChunkTable[BB_BITS];
 int bitToChunkIndexTable[BB_BITS];
-
+uint64_t chunkIndexToU64Table[64];
+uint64_t invChunkIndexToU64Table[64];
 Bitboard inBoundsMask;
 Bitboard star1MaskTable[BB_BITS];
 Bitboard star2MaskTable[BB_BITS];
@@ -115,12 +116,40 @@ Bitboard *bbRsh(Bitboard *bb, int n){
 	return bb;
 }
 
-int u64ToLS1BIndex(uint64_t x){
+/*int u64ToLS1BIndex(uint64_t x){
 	int i = 0;
 	x = ~x;
 	while( x & 1ULL){
 		x = x >> 1;
 		i++;
+	}
+	return i;
+}
+*/
+int u64ToLS1BIndex(uint64_t x){
+	int i = 0;
+	if((x & 0x00000000FFFFFFFFULL) == 0){
+		i += 32;
+		x >>= 32;
+	}
+	if((x & 0x000000000000FFFFULL) == 0){
+		i += 16;
+		x >>= 16;
+	}
+	if((x & 0x00000000000000FFULL) == 0){
+		i += 8;
+		x >>= 8;
+	}
+	if((x & 0x000000000000000FULL) == 0){
+		i += 4;
+		x >>= 4;
+	}
+	if((x & 0x0000000000000003ULL) == 0){
+		i+= 2;
+		x >>= 2;
+	}
+	if((x & 0x0000000000000001ULL) == 0){
+		i+=1;
 	}
 	return i;
 }
@@ -142,16 +171,16 @@ int bbNz(Bitboard *bb){
 }
 
 Bitboard *setBit(Bitboard *bb, int bit){
-	bb->bitChunk[bitToChunkTable[bit]] |= (1ULL << bitToChunkIndexTable[bit]);
+	bb->bitChunk[bitToChunkTable[bit]] |= chunkIndexToU64Table[bitToChunkIndexTable[bit]];
 	return bb;
 }
 
 Bitboard *unsetBit(Bitboard *bb, int bit){
-	bb->bitChunk[bitToChunkTable[bit]] &= ~(1ULL << bitToChunkIndexTable[bit]);
+	bb->bitChunk[bitToChunkTable[bit]] &= invChunkIndexToU64Table[bitToChunkIndexTable[bit]];
 	return bb;
 }
 int getBit(Bitboard *bb, int bit){
-	return bb->bitChunk[bitToChunkTable[bit]] & (1ULL << bitToChunkIndexTable[bit])   ? 1:0;
+	return bb->bitChunk[bitToChunkTable[bit]] & (chunkIndexToU64Table[bitToChunkIndexTable[bit]])   ? 1:0;
 }
 
 int pntToBit(int rank, int file){
@@ -175,6 +204,14 @@ void initBitToChunkIndexTable(){
 		bitToChunkIndexTable[i] = i%64;
 	}
 }
+
+void initChunkIndexToU64Tables(){
+	for (int i = 0; i < 64; i++){
+		chunkIndexToU64Table[i] = (1ULL << i);
+		invChunkIndexToU64Table[i] = ~chunkIndexToU64Table[i];
+	}
+}
+
 
 void initInBoundsMask(){
 	memset(&inBoundsMask, 0, sizeof(Bitboard));
@@ -215,10 +252,9 @@ void initStarMaskTables(){
 void initGame(){
 	g_numMoves = 0;
 	memset(g_game, 0, sizeof(g_game));
-	//initBitIndexSetTable();
-	//initBitIndexUnsetTable();
 	initBitToChunkTable();
 	initBitToChunkIndexTable();
+	initChunkIndexToU64Tables();
 	initInBoundsMask();
 	initStarMaskTables();
 }
@@ -564,7 +600,7 @@ Eval compute(Player_t player, int depth){
 
 void printBbString(Bitboard b){
 	for(int i = BB_BITS-1; i >= 0; i--){	
-		printf("%d", getBit(&b, i));
+		printf("%d", getBit(&b, i)? 1 : 0);
 		if (i%8 == 0){
 			printf(" ");
 		}
@@ -633,31 +669,33 @@ void printTable(int *arr, int rows, int cols){
 					main stuff
 ====================================================*/
 int testGame(){
+	play(pntToBit(8,8), WHITE);
 	play(pntToBit(9,9), WHITE);
-	play(pntToBit(9,10), WHITE);
-	play(pntToBit(9,11), WHITE);
+	play(pntToBit(7,9), WHITE);
 	play(pntToBit(8,9), BLACK);
-	play(pntToBit(8,10), BLACK);
-	play(pntToBit(8,11), BLACK);
+	play(pntToBit(9,8), BLACK);
+	play(pntToBit(7,8), BLACK);
 }
 
 
 int main(){	
 	initGame();
 	testGame();
-	/*
-	Bitboard moves = getMoves();
-	int move;
-	while( (move = bbGetLS1B(&moves)) != -1){
-		unsetBit(&moves, move);
-		printf("%d\n", move);
-	}
-	*/
-	int rank, file;	
+	
+
+	Eval e = compute(WHITE,5);
+	printf("score %d\tmove%d\n", e.score, e.move);
+	play(e.move, WHITE);
+	
+
+	/*int rankIn;
+	char fileIn;
 	while(1){	
 		printGame();
-		scanf("%d%d", &file, &rank);
+		scanf("%c%d", &fileIn, &rankIn);
 		while (getchar() != '\n'){};
+		int rank = rankIn;
+		int file = fileIn - 'a';
 		int bit = pntToBit(rank,file);
 		play(bit, BLACK);
 		if(isConnect5(bit, BLACK)){
@@ -665,7 +703,7 @@ int main(){
 			break;
 		}
 		printGame();
-		Eval e = compute(WHITE, 3);
+		Eval e = compute(WHITE, 5);
 		printf("score %d\tmove%d\n", e.score, e.move);
 		play(e.move, WHITE);
 		if(isConnect5(bit, BLACK)){
@@ -674,6 +712,7 @@ int main(){
 		}
 	}
 	printGame();
+	*/
 	/*Player_t player = BLACK;
 	int rank, file;
 	while(1){
