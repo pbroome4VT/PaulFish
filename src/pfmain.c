@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <pthread.h>
+
 
 #define GAME_MAX_MOVES (371)
 #define BB_BITS (448)		//7*64
@@ -580,14 +582,57 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 }
 
 
-Eval compute(Player_t player, int depth){
+Eval g_paulFishEval;
+typedef struct PaulFishArgsStruct PaulFishArgs;
+struct PaulFishArgsStruct{
+	Player_t player;
+	int maxDepth;
+};
+
+
+
+void *computeJob(void *arguments){
+	int retStatus;
+	PaulFishArgs *args = (PaulFishArgs *)arguments;
+	Player_t player = args->player;
+	int maxDepth = args->maxDepth;
+	retStatus = pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+	if(retStatus != 0){
+		perror("ERROR:computeJob(), pthread_setcanceltype() failed\n");
+		exit(1);
+	}
+	for(int depth = 1; depth <= maxDepth; depth++){	
+		clock_t t = clock();
+		g_paulFishEval = minimax(player, depth, 0 , 0);
+		t = clock() - t;
+		double timeTaken = (double)t / CLOCKS_PER_SEC;
+		printf("depth:%d     moveRec:%d     nodes:%ld     time%lf     nodes/sec:%lf\n",depth, g_paulFishEval.move, g_nodes, timeTaken, g_nodes/timeTaken);
+	}
+}
+
+Eval paulFish(PaulFishArgs args, int seconds){
+	int retStatus; 
+	pthread_t thread;
+	void *res;
+	
 	g_nodes = 0;
-	clock_t t = clock();
-	Eval e = minimax(player, depth, 0 , 0);
-	t = clock() - t;
-	double timeTaken = (double)t / CLOCKS_PER_SEC;
-	printf("%ld nodes\t%lf seconds\t%lf nodes/sec\n", g_nodes, timeTaken, g_nodes/timeTaken);
-	return e;
+	retStatus = pthread_create(&thread, NULL, &computeJob, &args);
+	if(retStatus != 0){
+		perror("ERROR: Paulfish(), pthread_create()\n");
+		exit(1);
+	}
+	sleep(seconds);
+	pthread_cancel(thread);
+	if(retStatus != 0){
+		perror ("ERROR: Paulfish(), pthread_cancel()\n");
+		exit(1);
+	}
+	retStatus = pthread_join(thread, &res);
+	if(retStatus != 0 ){
+		perror("ERROR: Paulfish(), pthread_join()\n");
+		exit(1);
+	}
+	return g_paulFishEval;
 }
 
 
@@ -682,8 +727,10 @@ int main(){
 	initGame();
 	testGame();
 	
-
-	Eval e = compute(WHITE,5);
+	PaulFishArgs args;
+	args.player= WHITE;
+	args.maxDepth = 8;
+	Eval e = paulFish(args, 5);
 	printf("score %d\tmove%d\n", e.score, e.move);
 	play(e.move, WHITE);
 	
