@@ -8,7 +8,7 @@ libraryFiles=-lpthread# -lallegro -lallegro_main -lallegro_primitives
 
 
 all: $(sourceFiles) # $(includeFiles)
-	gcc -v -g -o ./main.out $(sourceFiles) $(includeDirs) $(libraryDirs) $(libraryFiles)
+	gcc -O3 -v -g -o ./main.out $(sourceFiles) $(includeDirs) $(libraryDirs) $(libraryFiles)
 
 
 
