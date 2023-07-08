@@ -188,6 +188,14 @@ int getBit(Bitboard *bb, int bit){
 int pntToBit(int rank, int file){
 	return rank * 20 + file;
 }
+
+int bitToRank(int bit){
+	return bit / 20;
+}
+
+int bitToFile(int bit){
+	return bit % 20;
+}
 /*=====================================================
 
 				init functions
@@ -343,7 +351,7 @@ int makeCaptures(int bit, Player_t player){
 	{
 		numCaps++;
 		playerUnsetOcc(bit-1, opp);
-		playerUnsetOcc(bit-22, opp);
+		playerUnsetOcc(bit-2, opp);
 	}
 	// SW
 	if( bit-63 >= 0 &&
@@ -548,6 +556,13 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 				if(tmp.score > e.score){
 					e.score = tmp.score;
 					e.move = move;
+					if(e.score > beta){
+						undo();
+						return e;
+					}
+				}
+				if(alpha < e.score){
+					alpha = e.score;
 				}
 				undo();
 			}
@@ -569,6 +584,13 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 				if(tmp.score < e.score){
 					e.score = tmp.score;
 					e.move = move;
+					if(e.score < alpha){
+						undo();
+						return e;
+					}
+					if(beta > e.score){
+						beta = e.score;
+					}
 				}
 				undo();
 			}
@@ -603,7 +625,7 @@ void *computeJob(void *arguments){
 	}
 	for(int depth = 1; depth <= maxDepth; depth++){	
 		clock_t t = clock();
-		g_paulFishEval = minimax(player, depth, 0 , 0);
+		g_paulFishEval = minimax(player, depth, -10000 , 10000);
 		t = clock() - t;
 		double timeTaken = (double)t / CLOCKS_PER_SEC;
 		printf("depth:%d     moveRec:%d     nodes:%ld     time%lf     nodes/sec:%lf\n",depth, g_paulFishEval.move, g_nodes, timeTaken, g_nodes/timeTaken);
@@ -616,6 +638,8 @@ Eval paulFish(PaulFishArgs args, int seconds){
 	void *res;
 	
 	g_nodes = 0;
+	int currentMove = g_numMoves; //need this to restore board state when minimax gets interrupted halfway through calc
+	
 	retStatus = pthread_create(&thread, NULL, &computeJob, &args);
 	if(retStatus != 0){
 		perror("ERROR: Paulfish(), pthread_create()\n");
@@ -632,6 +656,7 @@ Eval paulFish(PaulFishArgs args, int seconds){
 		perror("ERROR: Paulfish(), pthread_join()\n");
 		exit(1);
 	}
+	g_numMoves = currentMove;
 	return g_paulFishEval;
 }
 
@@ -725,21 +750,21 @@ int testGame(){
 
 int main(){	
 	initGame();
-	testGame();
-	
+	//testGame();
+	/*
 	PaulFishArgs args;
 	args.player= WHITE;
 	args.maxDepth = 8;
-	Eval e = paulFish(args, 5);
+	Eval e = paulFish(args, 45);
 	printf("score %d\tmove%d\n", e.score, e.move);
 	play(e.move, WHITE);
-	
+	*/
 
-	/*int rankIn;
+	int rankIn;
 	char fileIn;
 	while(1){	
 		printGame();
-		scanf("%c%d", &fileIn, &rankIn);
+		int n =scanf("%c%d", &fileIn, &rankIn);
 		while (getchar() != '\n'){};
 		int rank = rankIn;
 		int file = fileIn - 'a';
@@ -750,8 +775,9 @@ int main(){
 			break;
 		}
 		printGame();
-		Eval e = compute(WHITE, 5);
-		printf("score %d\tmove%d\n", e.score, e.move);
+		PaulFishArgs args = {WHITE, 10};
+		Eval e = paulFish(args, 5);
+		printf("score %d\tmove(%c,%d)\n", e.score, bitToFile(e.move)+'a', bitToRank(e.move));
 		play(e.move, WHITE);
 		if(isConnect5(bit, BLACK)){
 			printf("GAME OVER\n");
@@ -759,7 +785,7 @@ int main(){
 		}
 	}
 	printGame();
-	*/
+	
 	/*Player_t player = BLACK;
 	int rank, file;
 	while(1){
