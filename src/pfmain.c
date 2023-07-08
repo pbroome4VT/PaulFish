@@ -18,7 +18,9 @@
 typedef enum PlayerEnum Player_t;
 enum PlayerEnum {BLACK = 0, WHITE = 1};
 
-
+char playerToChar(Player_t player){
+	return player == BLACK? 'B' : 'W';
+}
 
 typedef struct BitboardStruct Bitboard;
 struct BitboardStruct{
@@ -33,7 +35,6 @@ struct GameStruct{
 	char captures [2];		/* all bitboard indexed by Player_t. example horzBB[BLACK] */
 	Bitboard occupancies[2];
 	Bitboard star1Occupancies;
-	Bitboard star2Occupanceis;
 };
 
 
@@ -167,6 +168,26 @@ int bbGetLS1B(Bitboard *b){
 	return -1;
 }
 
+int countU64Bits(uint64_t x){
+	int count = 0;
+	while (x){
+		x &= (x-1);
+		count++;
+	}
+	return count;
+}
+
+int bbCountBits(Bitboard *b){
+	int count = 0;
+	if(b->bitChunk[0]){ count += countU64Bits(b->bitChunk[0]); }
+	if(b->bitChunk[1]){ count += countU64Bits(b->bitChunk[1]); }
+	if(b->bitChunk[2]){ count += countU64Bits(b->bitChunk[2]); }
+	if(b->bitChunk[3]){ count += countU64Bits(b->bitChunk[3]); }
+	if(b->bitChunk[4]){ count += countU64Bits(b->bitChunk[4]); }
+	if(b->bitChunk[5]){ count += countU64Bits(b->bitChunk[5]); }
+	if(b->bitChunk[6]){ count += countU64Bits(b->bitChunk[6]); }
+	return count;
+}
 
 int bbNz(Bitboard *bb){
 	return bb->bitChunk[0] || bb->bitChunk[1] || bb->bitChunk[2] || bb->bitChunk[3] || bb->bitChunk[4] || bb->bitChunk[5] || bb->bitChunk[6];
@@ -526,6 +547,34 @@ Bitboard getMovesStar1(){
 #define MAXIMIZER BLACK
 #define MINIMIZER WHITE
 
+typedef struct FrameStatsStruct FrameStats;
+struct FrameStatsStruct{
+	int singles;
+	int doubles;
+	int triples;
+	int quadruples;
+};
+
+
+FrameStats getFrameStats(){
+	Game frame = g_game[g_numMoves];
+	FrameStats stats;
+	//count singles
+	int singles;
+	singles = bbCountBits(&(frame.occupancies[MAXIMIZER])) - bbCountBits(&(frame.occupancies[MINIMIZER]));
+
+	stats.singles = singles;
+	return stats;
+};
+
+const int SINGLES_WEIGHT = 1;
+const int DOUBLES_WEIGHT = 2;
+const int TRIPLES_WEIGHT = 3;
+const int QUADRUPLES_WEIGHT = 4;
+int heuristic(Game *frame){
+	return 0;		
+}
+
 typedef struct EvalStruct Eval;
 struct EvalStruct{
 	int score;
@@ -725,6 +774,11 @@ void printBb(Bitboard bb){
 	printf("\n");
 }
 
+void printFrameStats(FrameStats stats){
+	printf("FrameStats:\n");
+	printf("\tsingles : %d\n\tdoubles : %d\n\ttriples : %d\n\tquadruples : %d\n", stats.singles, stats.doubles, stats.triples, stats.quadruples);
+}
+
 void printTable(int *arr, int rows, int cols){
 	for(int i = rows - 1; i >= 0; i--){
 		for(int k = 0; k < cols; k++){
@@ -760,21 +814,26 @@ int main(){
 	play(e.move, WHITE);
 	*/
 
+	Player_t player = BLACK;
 	int rankIn;
 	char fileIn;
 	while(1){	
 		printGame();
+		printFrameStats(getFrameStats());
+		printf("player %c enter move: ", playerToChar(player));
 		int n =scanf("%c%d", &fileIn, &rankIn);
 		while (getchar() != '\n'){};
 		int rank = rankIn;
 		int file = fileIn - 'a';
 		int bit = pntToBit(rank,file);
-		play(bit, BLACK);
-		if(isConnect5(bit, BLACK)){
+		play(bit, player);
+		if(isConnect5(bit, player)){
 			printf("GAME OVER\n");
 			break;
 		}
-		printGame();
+		player = getOpp(player);
+		printf("black #occs = %d\n", bbCountBits(&(g_game[g_numMoves].occupancies[BLACK])));
+		/*printGame();
 		PaulFishArgs args = {WHITE, 10};
 		Eval e = paulFish(args, 5);
 		printf("score %d\tmove(%c,%d)\n", e.score, bitToFile(e.move)+'a', bitToRank(e.move));
@@ -782,7 +841,7 @@ int main(){
 		if(isConnect5(bit, BLACK)){
 			printf("GAME OVER\n");
 			break;
-		}
+		}*/
 	}
 	printGame();
 	
