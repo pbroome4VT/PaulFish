@@ -37,6 +37,9 @@ struct GameStruct{
 	Bitboard star1Occupancies;
 };
 
+typedef enum Offset Offset;
+enum Offset {EAST = 1, NORTH_EAST = 21, NORTH = 20, NORTH_WEST = 19, WEST = -1, SOUTH_WEST = -21, SOUTH = -20, SOUTH_EAST = -19};
+const Offset principalDirection[] = {EAST, NORTH_EAST, NORTH, NORTH_WEST};		// list of the positive offset directions
 
 int g_numMoves;
 Game g_game[GAME_MAX_MOVES];
@@ -107,18 +110,18 @@ Bitboard *bbInv(Bitboard *bb){
 }
 
 
-Bitboard *bbRsh(Bitboard *bb, int n){
-	for (int i = 0; i < n; i++){	
-		bb->bitChunk[0] = ( bb->bitChunk[1] & 1ULL ) ? ( bb->bitChunk[0] >> 1 | 0x8000000000000000ULL ) : ( bb->bitChunk[0] >> 1 );
-		bb->bitChunk[1] = ( bb->bitChunk[2] & 1ULL ) ? ( bb->bitChunk[1] >> 1 | 0x8000000000000000ULL ) : ( bb->bitChunk[1] >> 1 );
-		bb->bitChunk[2] = ( bb->bitChunk[3] & 1ULL ) ? ( bb->bitChunk[2] >> 1 | 0x8000000000000000ULL ) : ( bb->bitChunk[2] >> 1 );
-		bb->bitChunk[3] = ( bb->bitChunk[4] & 1ULL ) ? ( bb->bitChunk[3] >> 1 | 0x8000000000000000ULL ) : ( bb->bitChunk[3] >> 1 );
-		bb->bitChunk[4] = ( bb->bitChunk[5] & 1ULL ) ? ( bb->bitChunk[4] >> 1 | 0x8000000000000000ULL ) : ( bb->bitChunk[4] >> 1 );
-		bb->bitChunk[5] = ( bb->bitChunk[6] & 1ULL ) ? ( bb->bitChunk[5] >> 1 | 0x8000000000000000ULL ) : ( bb->bitChunk[5] >> 1 );
-		bb->bitChunk[6] = ( bb->bitChunk[6] >> 1 );
-	}
-	return bb;
+//ONLY CALL WHEN SHIFTING LESS THAN 64 BITS AT A TIME!!
+Bitboard *bbLsh(Bitboard *bb, int n){
+	bb->bitChunk[6] = bb->bitChunk[6] << n | (bb->bitChunk[5] >> (64-n));
+	bb->bitChunk[5] = bb->bitChunk[5] << n | (bb->bitChunk[4] >> (64-n));
+	bb->bitChunk[4] = bb->bitChunk[4] << n | (bb->bitChunk[3] >> (64-n));
+	bb->bitChunk[3] = bb->bitChunk[3] << n | (bb->bitChunk[2] >> (64-n));
+	bb->bitChunk[2] = bb->bitChunk[2] << n | (bb->bitChunk[1] >> (64-n));
+	bb->bitChunk[1] = bb->bitChunk[1] << n | (bb->bitChunk[0] >> (64-n));
+	bb->bitChunk[0] = bb->bitChunk[0] << n; 
+
 }
+
 
 int u64ToLS1BIndex(uint64_t x){
 	int i = 0;
@@ -178,6 +181,21 @@ int bbCountBits(Bitboard *b){
 	if(b->bitChunk[5]){ count += countU64Bits(b->bitChunk[5]); }
 	if(b->bitChunk[6]){ count += countU64Bits(b->bitChunk[6]); }
 	return count;
+}
+
+//counts # of occurances of exactly n sequential bits
+int bbCountOffsetStreakOfN(Bitboard *bb, int offset, int n){
+	Bitboard cpy = *bb;	
+	Bitboard tmp = *bb;
+	bbInv(&cpy);
+	for(int shift = 1; shift <= n; shift++){
+		bbLsh(&tmp, offset);
+		bbAnd(&cpy, &tmp);
+	}
+	bbLsh(&tmp, offset);
+	bbInv(&tmp);
+	bbAnd(&cpy, &tmp);
+	return bbCountBits(&cpy);
 }
 
 int bbNz(Bitboard *bb){
@@ -540,95 +558,57 @@ Bitboard getMovesStar1(){
 
 typedef struct FrameStatsStruct FrameStats;
 struct FrameStatsStruct{
-	int singles;
-	int doubles;
-	int triples;
-	int quadruples;
+	int pieces[2];
+	int doubles[2];
+	int triples[2];
+	int quadruples[2];
 };
 
-
-FrameStats getFrameStats(){
-	Game frame = g_game[g_numMoves];
+FrameStats getFrameStats(){	
 	FrameStats stats;
 	memset(&stats, 0 , sizeof(stats));
-	//count singles
-	stats.singles = bbCountBits(&(frame.occupancies[MAXIMIZER])) - bbCountBits(&(frame.occupancies[MINIMIZER]));
+	Bitboard maximizerBb = g_game[g_numMoves].occupancies[MAXIMIZER];
+	Bitboard minimizerBb = g_game[g_numMoves].occupancies[MINIMIZER];
+
+	stats.pieces[MAXIMIZER] = bbCountBits(&maximizerBb);
+	stats.pieces[MINIMIZER] = bbCountBits(&minimizerBb);
 	
-	//count nonsingles
-	int offset = 1; // horz
-	Bitboard maximizerBb = frame.occupancies[MAXIMIZER];
-	Bitboard maximizerTmpBb = maximizerBb;
-	Bitboard minimizerBb = frame.occupancies[MINIMIZER];
-	Bitboard minimizerTmpBb = minimizerBb;
-	for(int i = 1; i <= 3; i++){
-		bbRsh(&maximizerTmpBb, offset);	// bitboard with shift of i * offset
-		bbRsh(&minimizerTmpBb, offset);
-		bbAnd(&maximizerBb, &maximizerTmpBb);
-		bbAnd(&minimizerBb, &minimizerTmpBb);
-		int x = bbCountBits(&maximizerBb) - bbCountBits(&minimizerBb);
-		if(i == 1){stats.doubles += x;}
-		if(i == 2){stats.triples += x;}
-		if(i == 3){stats.quadruples += x;}
-	}
-
-	offset = 19; // diag \.
-	maximizerBb = frame.occupancies[MAXIMIZER];
-	maximizerTmpBb = maximizerBb;
-	minimizerBb = frame.occupancies[MINIMIZER];
-	minimizerTmpBb = minimizerBb;
-	for(int i = 1; i <= 3; i++){
-		bbRsh(&maximizerTmpBb, offset);	// bitboard with shift of i * offset
-		bbRsh(&minimizerTmpBb, offset);
-		bbAnd(&maximizerBb, &maximizerTmpBb);
-		bbAnd(&minimizerBb, &minimizerTmpBb);
-		int x = bbCountBits(&maximizerBb) - bbCountBits(&minimizerBb);
-		if(i == 1){stats.doubles += x;}
-		if(i == 2){stats.triples += x;}
-		if(i == 3){stats.quadruples += x;}
-	}
-
-	offset = 20; // vert
-	maximizerBb = frame.occupancies[MAXIMIZER];
-	maximizerTmpBb = maximizerBb;
-	minimizerBb = frame.occupancies[MINIMIZER];
-	minimizerTmpBb = minimizerBb;
-	for(int i = 1; i <= 3; i++){
-		bbRsh(&maximizerTmpBb, offset);	// bitboard with shift of i * offset
-		bbRsh(&minimizerTmpBb, offset);
-		bbAnd(&maximizerBb, &maximizerTmpBb);
-		bbAnd(&minimizerBb, &minimizerTmpBb);
-		int x = bbCountBits(&maximizerBb) - bbCountBits(&minimizerBb);
-		if(i == 1){stats.doubles += x;}
-		if(i == 2){stats.triples += x;}
-		if(i == 3){stats.quadruples += x;}
-	}
-
-	offset = 21; // diag /
-	maximizerBb = frame.occupancies[MAXIMIZER];
-	maximizerTmpBb = maximizerBb;
-	minimizerBb = frame.occupancies[MINIMIZER];
-	minimizerTmpBb = minimizerBb;
-	for(int i = 1; i <= 3; i++){
-		bbRsh(&maximizerTmpBb, offset);	// bitboard with shift of i * offset
-		bbRsh(&minimizerTmpBb, offset);
-		bbAnd(&maximizerBb, &maximizerTmpBb);
-		bbAnd(&minimizerBb, &minimizerTmpBb);
-		int x = bbCountBits(&maximizerBb) - bbCountBits(&minimizerBb);
-		if(i == 1){stats.doubles += x;}
-		if(i == 2){stats.triples += x;}
-		if(i == 3){stats.quadruples += x;}
+	for(int direction = 0; direction < 4; direction++){
+		Offset offset = principalDirection[direction];
+		
+		stats.doubles[MAXIMIZER] += bbCountOffsetStreakOfN(&maximizerBb, offset, 2);
+		//printf("added %d doubles along offset %d\n", x, offset);
+		stats.doubles[MINIMIZER] += bbCountOffsetStreakOfN(&minimizerBb, offset, 2);	
+		stats.triples[MAXIMIZER] += bbCountOffsetStreakOfN(&maximizerBb, offset, 3);
+		stats.triples[MINIMIZER] += bbCountOffsetStreakOfN(&minimizerBb, offset, 3);
+		stats.quadruples[MAXIMIZER] += bbCountOffsetStreakOfN(&maximizerBb, offset, 4);
+		stats.quadruples[MINIMIZER] += bbCountOffsetStreakOfN(&minimizerBb, offset, 4);
 	}
 	return stats;
-};
+}
 
-const int SINGLES_WEIGHT = 100;
-const int DOUBLES_WEIGHT = 0;
+const int PIECES_WEIGHT = 1000;
+const int DOUBLES_WEIGHT = -800;
 const int TRIPLES_WEIGHT = 100;
-const int QUADRUPLES_WEIGHT = 100;
+const int QUADRUPLES_WEIGHT = 10;
 int heuristic(){
 	FrameStats stats = getFrameStats();
-	return SINGLES_WEIGHT * stats.singles + DOUBLES_WEIGHT * stats.doubles + TRIPLES_WEIGHT * stats.triples + QUADRUPLES_WEIGHT * stats.quadruples;
+	return 
+		PIECES_WEIGHT * (stats.pieces[MAXIMIZER] - stats.pieces[MINIMIZER]) +
+		DOUBLES_WEIGHT * (stats.doubles[MAXIMIZER] - stats.doubles[MINIMIZER]) +
+		TRIPLES_WEIGHT * (stats.triples[MAXIMIZER] - stats.triples[MINIMIZER]) +
+		QUADRUPLES_WEIGHT * (stats.quadruples[MAXIMIZER] - stats.quadruples[MINIMIZER]);
 }
+
+/* score ranges are
+	heurisitic score ranges : [-500k, 500k] 
+	maximizer forced win : (500k, 1 Mil)
+	minimizer forced win : [-1 Mil, 500k)
+
+	for forced whens, the number of moves until the win is calculated as 1Mil - numMoves or -1Mil + numMoves for max and min wins respectively
+*/
+const int MAXIMIZER_FORCED_WIN_SCORE =  1000000;
+const int MINIMIZER_FORCED_WIN_SCORE = -1000000;
 
 typedef struct EvalStruct Eval;
 struct EvalStruct{
@@ -636,6 +616,13 @@ struct EvalStruct{
 	int move;
 };
 
+int max(int x, int y){
+	return x > y ? x : y;
+}
+
+int min(int x, int y){
+	return x < y ? x : y;
+}
 
 long int g_nodes;	
 Eval minimax(Player_t player, int depth, int alpha, int beta){
@@ -645,13 +632,13 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 		int move;
 		if(player == MAXIMIZER){
 			// maximizer
-			e.score = -1001;
+			e.score = MINIMIZER_FORCED_WIN_SCORE-1;
 			e.move = -1;
 			while ( (move = bbGetLS1B(&moves)) != -1 ){
 				unsetBit(&moves, move);
 				playFast(move, MAXIMIZER);
 				if(isConnect5(move, MAXIMIZER)){
-					e.score = 1000;
+					e.score = MAXIMIZER_FORCED_WIN_SCORE;
 					e.move = move;
 					undo();
 					return e;
@@ -673,13 +660,13 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 			return e;
 		}else{
 			//minimizer	
-			e.score = 1001;
+			e.score = MAXIMIZER_FORCED_WIN_SCORE+1;
 			e.move = -1;
 			while ( (move = bbGetLS1B(&moves)) != -1 ){
 				unsetBit(&moves, move);
 				playFast(move, MINIMIZER);
 				if(isConnect5(move, MINIMIZER)){
-					e.score = -1000;
+					e.score = MINIMIZER_FORCED_WIN_SCORE;
 					e.move = move;
 					undo();
 					return e;
@@ -716,7 +703,6 @@ struct PaulFishArgsStruct{
 };
 
 
-
 void *computeJob(void *arguments){
 	int retStatus;
 	g_nodes = 0;	
@@ -730,7 +716,7 @@ void *computeJob(void *arguments){
 	}
 	for(int depth = 1; depth <= maxDepth; depth++){	
 		clock_t t = clock();
-		g_paulFishEval = minimax(player, depth, -10000 , 10000);
+		g_paulFishEval = minimax(player, depth, MINIMIZER_FORCED_WIN_SCORE , MAXIMIZER_FORCED_WIN_SCORE);
 		t = clock() - t;
 		double timeTaken = (double)t / CLOCKS_PER_SEC;
 		printf("depth:%d     score:%d     moveRec:(%c,%d)     nodes:%ld     time%lf     nodes/sec:%lf\n",depth, g_paulFishEval.score, bitToFile(g_paulFishEval.move)+'a', bitToRank(g_paulFishEval.move), g_nodes, timeTaken, g_nodes/timeTaken);
@@ -829,8 +815,12 @@ void printBb(Bitboard bb){
 }
 
 void printFrameStats(FrameStats stats){
-	printf("FrameStats:\n");
-	printf("\tsingles : %d\n\tdoubles : %d\n\ttriples : %d\n\tquadruples : %d\n", stats.singles, stats.doubles, stats.triples, stats.quadruples);
+	printf("Maximizer\t\tMinimizer\n");
+	printf("pieces : %3d\t\tpieces : %3d\n", stats.pieces[MAXIMIZER], stats.pieces[MINIMIZER]);	
+	printf("doubles : %3d\t\tdoubles : %3d\n", stats.doubles[MAXIMIZER], stats.doubles[MINIMIZER]);	
+	printf("triples : %3d\t\ttriples : %3d\n", stats.triples[MAXIMIZER], stats.triples[MINIMIZER]);	
+	printf("quadruples : %3d\t\tquadruples : %3d\n", stats.quadruples[MAXIMIZER], stats.quadruples[MINIMIZER]);	
+	//printf("\tsingles : %d\n\tdoubles : %d\n\ttriples : %d\n\tquadruples : %d\n", stats.singles, stats.doubles, stats.triples, stats.quadruples);
 }
 
 void printTable(int *arr, int rows, int cols){
@@ -847,19 +837,42 @@ void printTable(int *arr, int rows, int cols){
 					main stuff
 ====================================================*/
 int testGame(){
-	play(pntToBit(8,8), WHITE);
-	play(pntToBit(9,9), WHITE);
-	play(pntToBit(7,9), WHITE);
-	play(pntToBit(8,9), BLACK);
-	play(pntToBit(9,8), BLACK);
+	play(pntToBit(6,8), WHITE);
+	play(pntToBit(7,6), WHITE);
+	play(pntToBit(7,7), BLACK);
 	play(pntToBit(7,8), BLACK);
+	play(pntToBit(8,5), WHITE);
+	play(pntToBit(8,6), WHITE);
+	play(pntToBit(8,7), BLACK);
+	play(pntToBit(8,11), BLACK);
+	play(pntToBit(9,5), WHITE);
+	play(pntToBit(9,7), WHITE);
+	play(pntToBit(10,8), BLACK);
+	play(pntToBit(11,8), BLACK);
+	play(pntToBit(12,7), WHITE);
+	play(pntToBit(12,6), BLACK);
+	printGame();
+	Eval e = minimax(BLACK, 5, MINIMIZER_FORCED_WIN_SCORE, MAXIMIZER_FORCED_WIN_SCORE);	
+	printf("score %d\tmove(%c,%d)\n", e.score, bitToFile(e.move)+'a', bitToRank(e.move));
 }
 
+int testGame2(){
+	play(pntToBit(6,8), WHITE);
+	play(pntToBit(7,6), WHITE);
+	play(pntToBit(7,7), BLACK);
+	play(pntToBit(7,8), BLACK);
+	play(pntToBit(8,5), WHITE);
+	play(pntToBit(8,6), WHITE);
+	play(pntToBit(8,7), BLACK);
+	play(pntToBit(8,11), BLACK);
+	play(pntToBit(9,5), WHITE);
+}
 
 int main(){	
 	initGame();
+//	testGame();	
 
-	/*
+/*
 	PaulFishArgs args;
 	args.player= WHITE;
 	args.maxDepth = 8;
@@ -867,6 +880,9 @@ int main(){
 	printf("score %d\tmove%d\n", e.score, e.move);
 	play(e.move, WHITE);
 	*/
+
+//	testGame();
+
 
 	Player_t player = BLACK;
 	int rankIn;
@@ -888,10 +904,10 @@ int main(){
 		player = getOpp(player);
 		printGame();
 		PaulFishArgs args = {player, 10};
-		Eval e = paulFish(args, 5);
+		Eval e = paulFish(args, 10);
 		printf("score %d\tmove(%c,%d)\n", e.score, bitToFile(e.move)+'a', bitToRank(e.move));
 		play(e.move, player);
-		if(isConnect5(bit, player)){
+		if(isConnect5(e.move, player)){
 			printf("GAME OVER\n");
 			break;
 		}
@@ -899,15 +915,20 @@ int main(){
 	}
 	printGame();
 	
-	/*Player_t player = BLACK;
-	int rank, file;
-	while(1){
-		printBb(g_game[g_numMoves].occupancies[BLACK]);
-		printBb(g_game[g_numMoves].occupancies[WHITE]);
-		printBb(getMovesStar1());
+
+
+/*
+	Player_t player = BLACK;
+	int rankIn;
+	char fileIn;
+	while(1){	
 		printGame();
-		scanf("%d%d", &file, &rank);
+		printFrameStats(getFrameStats());
+		printf("player %c enter move: ", playerToChar(player));
+		int n =scanf("%c%d", &fileIn, &rankIn);
 		while (getchar() != '\n'){};
+		int rank = rankIn;
+		int file = fileIn - 'a';
 		int bit = pntToBit(rank,file);
 		play(bit, player);
 		if(isConnect5(bit, player)){
@@ -916,6 +937,5 @@ int main(){
 		}
 		player = getOpp(player);
 	}
-	printGame();
-	*/
+*/
 }
