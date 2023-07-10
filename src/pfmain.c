@@ -7,6 +7,7 @@
 #include <pthread.h>
 
 
+#define GAME_BOARD_SQUARES (361)
 #define GAME_MAX_MOVES (371)
 #define BB_BITS (448)		//7*64
 
@@ -35,21 +36,25 @@ struct GameStruct{
 	char captures [2];		/* all bitboard indexed by Player_t. example horzBB[BLACK] */
 	Bitboard occupancies[2];
 	Bitboard star1Occupancies;
+	int candidateMoves[GAME_BOARD_SQUARES];
 };
 
-typedef enum Offset Offset;
-enum Offset {EAST = 1, NORTH_EAST = 21, NORTH = 20, NORTH_WEST = 19, WEST = -1, SOUTH_WEST = -21, SOUTH = -20, SOUTH_EAST = -19};
-const Offset principalDirection[] = {EAST, NORTH_EAST, NORTH, NORTH_WEST};		// list of the positive offset directions
 
 int g_numMoves;
 Game g_game[GAME_MAX_MOVES];
-
+int g_moves[GAME_MAX_MOVES];
 
 /*=====================================================
 
 				Precalculated Tables/bitboards
 
 =======================================================*/
+
+typedef enum Offset Offset;
+enum Offset {EAST = 1, NORTH_EAST = 21, NORTH = 20, NORTH_WEST = 19, WEST = -1, SOUTH_WEST = -21, SOUTH = -20, SOUTH_EAST = -19, NUM_OFFSETS = 8};
+const Offset principalDirection[] = {EAST, NORTH_EAST, NORTH, NORTH_WEST};		// list of the positive offset directions
+const Offset direction = {EAST, NORTH_EAST, NORTH, NORTH_WEST, WEST, SOUTH_WEST, SOUTH, SOUTH_EAST};
+
 int bitToChunkTable[BB_BITS];
 int bitToChunkIndexTable[BB_BITS];
 uint64_t chunkIndexToU64Table[64];
@@ -514,6 +519,9 @@ int isConnect5(int bitIndex, Player_t player){
 	return 0;
 }
 
+int isGameOver(int bitIndex, Player_t player){
+	return g_game[g_numMoves].captures[player] == 5 || isConnect5(bitIndex, player);
+}
 
 void play(int bit, Player_t player){
 	g_numMoves++;
@@ -536,6 +544,22 @@ void undo(){
 
 void playFast(int bit, Player_t player){
 	play(bit, player);
+}
+
+
+//TODO make an int list of moves in each frame
+void NewgetMoves(){
+	int moveIndex = 0;
+	int *moveArr = g_game[g_numMoves].frame.moveCandidates;
+
+	for(Offset dir = 0; dir <= NUM_OFFSETS; dir++){
+		
+	}
+	// add 5 in a row moves
+	// add capture moves
+	// add blocking enemy 3/4 moves
+	//add chebychev 1 moves
+	//add chebychev 2 moves
 }
 
 Bitboard getMoves(){
@@ -637,7 +661,7 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 			while ( (move = bbGetLS1B(&moves)) != -1 ){
 				unsetBit(&moves, move);
 				playFast(move, MAXIMIZER);
-				if(isConnect5(move, MAXIMIZER)){
+				if(isGameOver(move, MAXIMIZER)){
 					e.score = MAXIMIZER_FORCED_WIN_SCORE;
 					e.move = move;
 					undo();
@@ -665,7 +689,7 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 			while ( (move = bbGetLS1B(&moves)) != -1 ){
 				unsetBit(&moves, move);
 				playFast(move, MINIMIZER);
-				if(isConnect5(move, MINIMIZER)){
+				if(isGameOver(move, MINIMIZER)){
 					e.score = MINIMIZER_FORCED_WIN_SCORE;
 					e.move = move;
 					undo();
@@ -883,7 +907,6 @@ int main(){
 
 //	testGame();
 
-
 	Player_t player = BLACK;
 	int rankIn;
 	char fileIn;
@@ -904,7 +927,7 @@ int main(){
 		player = getOpp(player);
 		printGame();
 		PaulFishArgs args = {player, 10};
-		Eval e = paulFish(args, 10);
+		Eval e = paulFish(args, 5);
 		printf("score %d\tmove(%c,%d)\n", e.score, bitToFile(e.move)+'a', bitToRank(e.move));
 		play(e.move, player);
 		if(isConnect5(e.move, player)){
