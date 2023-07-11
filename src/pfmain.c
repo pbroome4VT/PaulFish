@@ -970,8 +970,8 @@ int main(){
 		}
 		player = getOpp(player);
 		printGame();
-		PaulFishArgs args = {player, 10};
-		Eval e = paulFish(args, 5);
+		PaulFishArgs args = {player, 100};
+		Eval e = paulFish(args, 20);
 		printf("score %d\tmove(%c,%d)\n", e.score, bitToFile(e.move)+'a', bitToRank(e.move));
 		play(e.move, player);
 		if(isConnect5(e.move, player)){
