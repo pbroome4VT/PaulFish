@@ -671,6 +671,9 @@ int heuristic(){
 const int MAXIMIZER_FORCED_WIN_SCORE =  1000000;
 const int MINIMIZER_FORCED_WIN_SCORE = -1000000;
 
+const int MAXIMIZER_FORCED_WIN_RANGE =  500000;	// value > than MAX_FORCED_WIN RANGE is always a forced win
+const int MINIMIZER_FORCED_WIN_RANGE = -500000;	
+
 typedef struct EvalStruct Eval;
 struct EvalStruct{
 	int score;
@@ -707,7 +710,7 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 				if(tmp.score > e.score){
 					e.score = tmp.score;
 					e.move = move;
-					if(e.score > beta){
+					if(e.score >= beta){
 						undo();
 						return e;
 					}
@@ -716,6 +719,9 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 					alpha = e.score;
 				}
 				undo();
+			}
+			if(e.score < MINIMIZER_FORCED_WIN_RANGE){
+				e.score += 1;
 			}
 			return e;
 		}else{
@@ -736,7 +742,7 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 				if(tmp.score < e.score){
 					e.score = tmp.score;
 					e.move = move;
-					if(e.score < alpha){
+					if(e.score <= alpha){
 						undo();
 						return e;
 					}
@@ -745,6 +751,9 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 					}
 				}
 				undo();
+			}
+			if(e.score > MAXIMIZER_FORCED_WIN_RANGE){
+				e.score -= 1;
 			}
 			return e;
 		}
@@ -972,6 +981,7 @@ int main(){
 		player = getOpp(player);
 	}
 	printGame();
+	
 
 
 

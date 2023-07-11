@@ -10,8 +10,9 @@ libraryFiles=-lpthread# -lallegro -lallegro_main -lallegro_primitives
 all: $(sourceFiles) # $(includeFiles)
 	gcc -v -g -o ./main.out $(sourceFiles) $(includeDirs) $(libraryDirs) $(libraryFiles) -pg
 
-
-
+release: $(sourceFiles) # $(includeFiles)
+	gcc -O3 -v -g -o ./main.out $(sourceFiles) $(includeDirs) $(libraryDirs) $(libraryFiles) -pg
+	
 allegro: 
 	echo "making allegro"
 
