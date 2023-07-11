@@ -52,8 +52,8 @@ int g_moves[GAME_MAX_MOVES];
 
 typedef enum Offset Offset;
 enum Offset {EAST = 1, NORTH_EAST = 21, NORTH = 20, NORTH_WEST = 19, WEST = -1, SOUTH_WEST = -21, SOUTH = -20, SOUTH_EAST = -19, NUM_OFFSETS = 8};
-const Offset principalDirection[] = {EAST, NORTH_EAST, NORTH, NORTH_WEST};		// list of the positive offset directions
-const Offset direction = {EAST, NORTH_EAST, NORTH, NORTH_WEST, WEST, SOUTH_WEST, SOUTH, SOUTH_EAST};
+const Offset PRINCIPAL_DIRECTION[] = {EAST, NORTH_EAST, NORTH, NORTH_WEST};		// list of the positive offset directions
+const Offset DIRECTION[] = {EAST, NORTH_EAST, NORTH, NORTH_WEST, WEST, SOUTH_WEST, SOUTH, SOUTH_EAST};
 
 int bitToChunkTable[BB_BITS];
 int bitToChunkIndexTable[BB_BITS];
@@ -70,6 +70,7 @@ Bitboard star2MaskTable[BB_BITS];
 				Bitboard Functions
 
 =======================================================*/
+
 
 Bitboard *bbAnd(Bitboard *bb1, Bitboard *bb2){
 	bb1->bitChunk[0] &= bb2->bitChunk[0];
@@ -112,8 +113,19 @@ Bitboard *bbInv(Bitboard *bb){
 	bb->bitChunk[4] = ~(bb->bitChunk[4]);
 	bb->bitChunk[5] = ~(bb->bitChunk[5]);
 	bb->bitChunk[6] = ~(bb->bitChunk[6]);
+	return bb;
 }
 
+//(p & ~ q)
+Bitboard *bbPAndNotQ(Bitboard *p, Bitboard *q){
+	p->bitChunk[0] &= ~q->bitChunk[0];	
+	p->bitChunk[1] &= ~q->bitChunk[1];	
+	p->bitChunk[2] &= ~q->bitChunk[2];	
+	p->bitChunk[3] &= ~q->bitChunk[3];	
+	p->bitChunk[4] &= ~q->bitChunk[4];	
+	p->bitChunk[5] &= ~q->bitChunk[5];	
+	p->bitChunk[6] &= ~q->bitChunk[6];	
+}
 
 //ONLY CALL WHEN SHIFTING LESS THAN 64 BITS AT A TIME!!
 Bitboard *bbLsh(Bitboard *bb, int n){
@@ -124,9 +136,20 @@ Bitboard *bbLsh(Bitboard *bb, int n){
 	bb->bitChunk[2] = bb->bitChunk[2] << n | (bb->bitChunk[1] >> (64-n));
 	bb->bitChunk[1] = bb->bitChunk[1] << n | (bb->bitChunk[0] >> (64-n));
 	bb->bitChunk[0] = bb->bitChunk[0] << n; 
-
+	return bb;
 }
 
+//ONLY CALL WHEN SHIFTING LESS THAN 64 BITS AT A TIME!!
+Bitboard *bbRsh(Bitboard *bb, int n){
+	bb->bitChunk[0] = bb->bitChunk[0] >> n | (bb->bitChunk[1] << (64-n));
+	bb->bitChunk[1] = bb->bitChunk[1] >> n | (bb->bitChunk[2] << (64-n));
+	bb->bitChunk[2] = bb->bitChunk[2] >> n | (bb->bitChunk[3] << (64-n));
+	bb->bitChunk[3] = bb->bitChunk[3] >> n | (bb->bitChunk[4] << (64-n));
+	bb->bitChunk[4] = bb->bitChunk[4] >> n | (bb->bitChunk[5] << (64-n));
+	bb->bitChunk[5] = bb->bitChunk[5] >> n | (bb->bitChunk[6] << (64-n));
+	bb->bitChunk[6] = bb->bitChunk[6] >> n; 
+	return bb;
+}
 
 int u64ToLS1BIndex(uint64_t x){
 	int i = 0;
@@ -334,190 +357,126 @@ void playerAddCaps(int caps, Player_t player){
 	g_game[g_numMoves].captures[player] += caps;
 }
 
+
+void printBb(Bitboard bb){
+	for(int rank = 19; rank >= 0; rank--){
+		printf("%2d  ", rank);
+		for(int file = 0; file <= 19; file++){
+			int bit = pntToBit(rank,file);
+			char c;
+			if(getBit(&bb, bit)){
+				c = '1';
+			}else{
+				c = '0';
+			}
+			printf("%c ", c);
+		}
+		printf("\n");
+	}
+	printf("    ");
+	for(int file = 0; file <= 19; file++){
+		printf("%c ", 'a' + file);
+	}
+	printf("\n");
+}
+
+void printBbString(Bitboard b){
+	for(int i = BB_BITS-1; i >= 0; i--){	
+		printf("%d", getBit(&b, i)? 1 : 0);
+		if (i%8 == 0){
+			printf(" ");
+		}
+	}
+	printf("\n\n");
+}
+
 /*=====================================================
 
 				Game functions
 
 =======================================================*/
+
+
 int makeCaptures(int bit, Player_t player){
 	int numCaps = 0;
 	Player_t opp = getOpp(player);
-	//E
-	if( playerGetOcc(bit+1, opp) &&
-		playerGetOcc(bit+2, opp) &&
-		playerGetOcc(bit+3, player))
-	{
-		numCaps++;
-		playerUnsetOcc(bit+1, opp);
-		playerUnsetOcc(bit+2, opp);
-	}
-	//NE 
-	if( playerGetOcc(bit+21, opp) &&
-		playerGetOcc(bit+42, opp) &&
-		playerGetOcc(bit+63, player))
-	{
-		numCaps++;
-		playerUnsetOcc(bit+21, opp);
-		playerUnsetOcc(bit+42, opp);
-	}
-	//N
-	if( playerGetOcc(bit+20, opp) &&
-		playerGetOcc(bit+40, opp) &&
-		playerGetOcc(bit+60, player))
-	{
-		numCaps++;
-		playerUnsetOcc(bit+20, opp);
-		playerUnsetOcc(bit+40, opp);
-	}
-	//NW
-	if( playerGetOcc(bit+19, opp) &&
-		playerGetOcc(bit+38, opp) &&
-		playerGetOcc(bit+57, player))
-	{
-		numCaps++;
-		playerUnsetOcc(bit+19, opp);
-		playerUnsetOcc(bit+38, opp);
-	}
-	//W
-	if( bit - 3 >= 0 &&
-		playerGetOcc(bit-1, opp) &&
-		playerGetOcc(bit-2, opp) &&
-		playerGetOcc(bit-3, player))
-	{
-		numCaps++;
-		playerUnsetOcc(bit-1, opp);
-		playerUnsetOcc(bit-2, opp);
-	}
-	// SW
-	if( bit-63 >= 0 &&
-		playerGetOcc(bit-21, opp) &&
-		playerGetOcc(bit-42, opp) &&
-		playerGetOcc(bit-63, player))
-	{
-		numCaps++;
-		playerUnsetOcc(bit-21, opp);
-		playerUnsetOcc(bit-42, opp);
-	}
-	// S
-	if( bit - 60 >= 0 &&
-		playerGetOcc(bit-20, opp) &&
-		playerGetOcc(bit-40, opp) &&
-		playerGetOcc(bit-60, player))
-	{
-		numCaps++;
-		playerUnsetOcc(bit-20, opp);
-		playerUnsetOcc(bit-40, opp);
-	}
-	//SE
-	if( bit - 57 > 0 &&
-		playerGetOcc(bit-19, opp) &&
-		playerGetOcc(bit-38, opp) &&
-		playerGetOcc(bit-57, player))
-	{
-		numCaps++;
-		playerUnsetOcc(bit-19, opp);
-		playerUnsetOcc(bit-38, opp);
+	for(int direction = 0; direction < 4; direction++){
+		Offset offset = PRINCIPAL_DIRECTION[direction];
+		if(
+			playerGetOcc(bit + offset, opp) &&
+			playerGetOcc(bit + 2 * offset, opp) &&
+			playerGetOcc(bit + 3 * offset, player))
+		{
+			numCaps++;
+			playerUnsetOcc(bit + offset, opp);
+			playerUnsetOcc(bit + 2 * offset, opp);
+		}
+		if(
+			bit - 3 * offset >= 0 &&
+			playerGetOcc(bit - offset, opp) &&
+			playerGetOcc(bit - 2 * offset, opp) &&
+			playerGetOcc(bit - 3 * offset, player))
+		{
+			numCaps++;
+			playerUnsetOcc(bit - offset, opp);
+			playerUnsetOcc(bit - 2 * offset, opp);
+		}
 	}
 	return numCaps;
 }
 
-int isConnect5(int bitIndex, Player_t player){
-	int streak;
-	
-	//check rank
-	streak = 1;
-	for(int i = 1; i < 5; i++){
-		int offset = 1;
-		int bit = bitIndex + i * offset;
-		if(playerGetOcc(bit, player)){
-			streak++;
-		}else{
-			break;
+
+int isCapture(int bit, Player_t player){
+	Player_t opp = getOpp(player);
+	for(int direction = 0; direction < 4; direction++){
+		Offset offset = PRINCIPAL_DIRECTION[direction];
+		if(
+			playerGetOcc(bit + offset, opp) &&
+			playerGetOcc(bit + 2 * offset, opp) &&
+			playerGetOcc(bit + 3 * offset, player))
+		{
+			return 1;
 		}
-	}
-	for(int i = 1; i < 5; i++){
-		int offset = -1;
-		int bit = bitIndex + i * offset;
-		if(bit >= 0 && playerGetOcc(bit, player)){
-			streak++;
-		}else{
-			break;
+		if(
+			bit - 3 * offset >= 0 &&
+			playerGetOcc(bit - offset, opp) &&
+			playerGetOcc(bit - 2 * offset, opp) &&
+			playerGetOcc(bit - 3 * offset, player))
+		{
+			return 1;
 		}
-	}
-	if(streak >= 5){
-		return 1;
-	}
-	//check diag1
-	streak = 1;
-	for(int i = 1; i < 5; i++){
-		int offset = 21;
-		int bit = bitIndex + i * offset;
-		if(playerGetOcc(bit, player)){
-			streak++;
-		}else{
-			break;
-		}
-	}
-	for(int i = 1; i < 5; i++){
-		int offset = -21;
-		int bit = bitIndex + i * offset;
-		if(bit >= 0 && playerGetOcc(bit, player)){
-			streak++;
-		}else{
-			break;
-		}
-	}
-	if(streak >= 5){
-		return 1;
-	}
-	//check file
-	streak = 1;
-	for(int i = 1; i < 5; i++){
-		int offset = 20;
-		int bit = bitIndex + i * offset;
-		if(playerGetOcc(bit, player)){
-			streak++;
-		}else{
-			break;
-		}
-	}
-	for(int i = 1; i < 5; i++){
-		int offset = -20;
-		int bit = bitIndex + i * offset;
-		if(bit >= 0 && playerGetOcc(bit, player)){
-			streak++;
-		}else{
-			break;
-		}
-	}
-	if(streak >= 5){
-		return 1;
-	}
-	//check diag2
-	streak = 1;
-	for(int i = 1; i < 5; i++){
-		int offset = 19;
-		int bit = bitIndex + i * offset;
-		if(playerGetOcc(bit, player)){
-			streak++;
-		}else{
-			break;
-		}
-	}
-	for(int i = 1; i < 5; i++){
-		int offset = -19;
-		int bit = bitIndex + i * offset;
-		if(bit >= 0 && playerGetOcc(bit, player)){
-			streak++;
-		}else{
-			break;
-		}
-	}
-	if(streak >= 5){
-		return 1;
 	}
 	return 0;
 }
+
+int isConnect5(int bitIndex, Player_t player){
+	for(int direction = 0; direction < 4; direction++){
+		Offset offset = PRINCIPAL_DIRECTION[direction];
+		int streak = 1;
+		for(int i = 1; i < 5; i++){
+			int bit = bitIndex + i * offset;
+			if(playerGetOcc(bit, player)){
+				streak++;
+			}else{
+				break;
+			}
+		}
+		for(int i = 1; i < 5; i++){
+			int bit = bitIndex - i * offset;
+			if(bit >= 0 && playerGetOcc(bit, player)){
+				streak++;
+			}else{
+				break;
+			}
+		}
+		if(streak >= 5){
+			return 1;
+		}
+	}
+	return 0;
+}
+
+
 
 int isGameOver(int bitIndex, Player_t player){
 	return g_game[g_numMoves].captures[player] == 5 || isConnect5(bitIndex, player);
@@ -536,33 +495,104 @@ void undo(){
 }
 
 
+
 /*=====================================================
 
-				  AI data+functions
+				  Move Generation
 
 =======================================================*/
-
-void playFast(int bit, Player_t player){
-	play(bit, player);
-}
-
-
-//TODO make an int list of moves in each frame
-void NewgetMoves(){
-	int moveIndex = 0;
-	int *moveArr = g_game[g_numMoves].frame.moveCandidates;
-
-	for(Offset dir = 0; dir <= NUM_OFFSETS; dir++){
-		
+int addMoves(int *arr, Bitboard *b){
+	int i = 0;
+	int bit;
+	while ( (bit = bbGetLS1B(b)) != -1){
+		unsetBit(b, bit);	
+		arr[i++] = bit;
 	}
-	// add 5 in a row moves
-	// add capture moves
-	// add blocking enemy 3/4 moves
-	//add chebychev 1 moves
-	//add chebychev 2 moves
+	return i;
 }
 
-Bitboard getMoves(){
+void bbAndNotOccupied(Bitboard *b){
+	Bitboard tmp = g_game[g_numMoves].occupancies[BLACK];
+	bbOr(&tmp, &(g_game[g_numMoves].occupancies[WHITE]));
+	bbInv(&tmp);
+	bbAnd(b, &tmp);
+}
+
+void bbGetConnect5Moves(Bitboard *b, Player_t player){
+	memset(b, 0,  sizeof(*b));
+	//set all bits that make 5 in a row.
+	Bitboard star1Bb = g_game[g_numMoves].star1Occupancies;
+	bbAndNotOccupied(&star1Bb);
+	int bit;
+	while((bit = bbGetLS1B(&star1Bb)) != -1){
+		unsetBit(&star1Bb, bit);
+		if(isConnect5(bit, player)){
+			setBit(b, bit);
+		}
+	}
+}
+
+// return a bb of all moves that make or block a capture
+void bbGetCaptureMoves(Bitboard *b, Player_t player){
+	memset(b, 0,  sizeof(*b));
+	//set all bits that make 5 in a row.
+	Bitboard star1Bb = g_game[g_numMoves].star1Occupancies;
+	bbAndNotOccupied(&star1Bb);
+	int bit;
+	while((bit = bbGetLS1B(&star1Bb)) != -1){
+		unsetBit(&star1Bb, bit);
+		if(isCapture(bit, player)){
+			setBit(b, bit);
+		}
+	}
+}
+
+//TODO make a function that populates canditemoves[] with prioritized move options for player
+int getMoves(Player_t player){
+	int moveIndex = 0;
+	int *moveArr = g_game[g_numMoves].candidateMoves;
+	Bitboard cumulitiveMoves;
+	memset(&cumulitiveMoves, 0, sizeof(Bitboard));
+	Bitboard bitboard;
+
+// add 5 in a row moves
+	bbGetConnect5Moves( &bitboard, player);
+	bbOr(&cumulitiveMoves, &bitboard);
+	moveIndex += addMoves(moveArr + moveIndex, &bitboard);
+// add 5 in a row blocks
+	bbGetConnect5Moves(&bitboard, getOpp(player));
+	bbPAndNotQ(&bitboard, &cumulitiveMoves);	//stop double adding moves
+	bbOr(&cumulitiveMoves, &bitboard);	
+	moveIndex += addMoves(moveArr + moveIndex, &bitboard);
+// add capture moves
+	bbGetCaptureMoves(&bitboard, player);
+	bbPAndNotQ(&bitboard, &cumulitiveMoves);	//stop double adding moves
+	bbOr(&cumulitiveMoves, &bitboard);
+	moveIndex += addMoves(moveArr + moveIndex, &bitboard);
+// add capture defense moves
+	bbGetCaptureMoves(&bitboard, getOpp(player));
+	bbPAndNotQ(&bitboard, &cumulitiveMoves);	//stop double adding moves
+	bbOr(&cumulitiveMoves, &bitboard);
+	moveIndex += addMoves(moveArr + moveIndex, &bitboard);
+// add star 1 moves
+	bitboard = g_game[g_numMoves].star1Occupancies;
+	bbAndNotOccupied(&bitboard);
+	bbPAndNotQ(&bitboard, &cumulitiveMoves);	//stop double adding moves
+	bbOr(&cumulitiveMoves, &bitboard);
+	moveIndex += addMoves(moveArr + moveIndex, &bitboard);
+//add star 2 moves
+/*	bbGetCaptureMoves(&bitboard, player);
+	bbPAndNotQ(&bitboard, &cumulitiveMoves);	//stop double adding moves
+	bbOr(&cumulitiveMoves, &bitboard);
+	moveIndex += addMoves(moveArr + moveIndex, &bitboard);
+*/
+	return moveIndex;
+}
+
+
+/*
+//all possible moves
+Bitboard getAllMoves(){
 	Bitboard b;
 	b = g_game[g_numMoves].occupancies[BLACK];
 	bbOr(&b, &(g_game[g_numMoves].occupancies[WHITE]));
@@ -570,12 +600,19 @@ Bitboard getMoves(){
 	return b;
 }
 
+//chebychev 1 moves
 Bitboard getMovesStar1(){
 	Bitboard b = g_game[g_numMoves].star1Occupancies;
 	bbXor(&b, &(g_game[g_numMoves].occupancies[BLACK]));
 	bbXor(&b, &(g_game[g_numMoves].occupancies[WHITE]));
 	return b;
 }
+*/
+/*=====================================================
+
+				  AI data+functions
+
+=======================================================*/
 
 #define MAXIMIZER BLACK
 #define MINIMIZER WHITE
@@ -598,7 +635,7 @@ FrameStats getFrameStats(){
 	stats.pieces[MINIMIZER] = bbCountBits(&minimizerBb);
 	
 	for(int direction = 0; direction < 4; direction++){
-		Offset offset = principalDirection[direction];
+		Offset offset = PRINCIPAL_DIRECTION[direction];
 		
 		stats.doubles[MAXIMIZER] += bbCountOffsetStreakOfN(&maximizerBb, offset, 2);
 		//printf("added %d doubles along offset %d\n", x, offset);
@@ -651,16 +688,15 @@ int min(int x, int y){
 long int g_nodes;	
 Eval minimax(Player_t player, int depth, int alpha, int beta){
 	Eval e;
-	if(depth){
-		Bitboard moves = getMovesStar1();
-		int move;
+	if(depth){;
 		if(player == MAXIMIZER){
 			// maximizer
 			e.score = MINIMIZER_FORCED_WIN_SCORE-1;
 			e.move = -1;
-			while ( (move = bbGetLS1B(&moves)) != -1 ){
-				unsetBit(&moves, move);
-				playFast(move, MAXIMIZER);
+			int movesLen = getMoves(MAXIMIZER);
+			for(int i = 0; i < movesLen; i++){
+				int move = g_game[g_numMoves].candidateMoves[i];
+				play(move, MAXIMIZER);
 				if(isGameOver(move, MAXIMIZER)){
 					e.score = MAXIMIZER_FORCED_WIN_SCORE;
 					e.move = move;
@@ -686,9 +722,10 @@ Eval minimax(Player_t player, int depth, int alpha, int beta){
 			//minimizer	
 			e.score = MAXIMIZER_FORCED_WIN_SCORE+1;
 			e.move = -1;
-			while ( (move = bbGetLS1B(&moves)) != -1 ){
-				unsetBit(&moves, move);
-				playFast(move, MINIMIZER);
+			int movesLen = getMoves(MAXIMIZER);
+			for(int i = 0; i < movesLen; i++){
+				int move = g_game[g_numMoves].candidateMoves[i];
+				play(move, MINIMIZER);
 				if(isGameOver(move, MINIMIZER)){
 					e.score = MINIMIZER_FORCED_WIN_SCORE;
 					e.move = move;
@@ -781,15 +818,6 @@ Eval paulFish(PaulFishArgs args, int seconds){
 =======================================================*/
 
 
-void printBbString(Bitboard b){
-	for(int i = BB_BITS-1; i >= 0; i--){	
-		printf("%d", getBit(&b, i)? 1 : 0);
-		if (i%8 == 0){
-			printf(" ");
-		}
-	}
-	printf("\n\n");
-}
 
 void printGame(){
 	for(int rank = 18; rank >= 0; rank--){
@@ -816,24 +844,9 @@ void printGame(){
 	printf("Black Captures %d\t WhiteCaptures %d\n", playerGetCaps(BLACK), playerGetCaps(WHITE));
 }
 
-void printBb(Bitboard bb){
-	for(int rank = 19; rank >= 0; rank--){
-		printf("%2d  ", rank);
-		for(int file = 0; file <= 19; file++){
-			int bit = pntToBit(rank,file);
-			char c;
-			if(getBit(&bb, bit)){
-				c = '1';
-			}else{
-				c = '0';
-			}
-			printf("%c ", c);
-		}
-		printf("\n");
-	}
-	printf("    ");
-	for(int file = 0; file <= 19; file++){
-		printf("%c ", 'a' + file);
+void printMovesArr(int *arr, int n){
+	for(int i = 0; i <n; i++){
+		printf("(%c,%d) ", bitToFile(arr[i]) + 'a', bitToRank(arr[i]));
 	}
 	printf("\n");
 }
@@ -860,7 +873,7 @@ void printTable(int *arr, int rows, int cols){
 /*====================================================
 					main stuff
 ====================================================*/
-int testGame(){
+void testGame(){
 	play(pntToBit(6,8), WHITE);
 	play(pntToBit(7,6), WHITE);
 	play(pntToBit(7,7), BLACK);
@@ -880,7 +893,7 @@ int testGame(){
 	printf("score %d\tmove(%c,%d)\n", e.score, bitToFile(e.move)+'a', bitToRank(e.move));
 }
 
-int testGame2(){
+void testGame2(){
 	play(pntToBit(6,8), WHITE);
 	play(pntToBit(7,6), WHITE);
 	play(pntToBit(7,7), BLACK);
@@ -892,9 +905,31 @@ int testGame2(){
 	play(pntToBit(9,5), WHITE);
 }
 
+void testGame3(){
+	play(pntToBit(10,8), BLACK);
+	play(pntToBit(9,8), BLACK);
+	play(pntToBit(8,8), BLACK);
+	play(pntToBit(7,8), BLACK);
+	play(pntToBit(8,7), BLACK);
+	play(pntToBit(8,6), BLACK);
+	play(pntToBit(8,5), BLACK);
+	play(pntToBit(11,6), WHITE);
+	play(pntToBit(11,7), WHITE);
+	play(pntToBit(11,8), WHITE);
+	play(pntToBit(11,9), WHITE);
+	play(pntToBit(10,9), WHITE);
+	printGame();	
+	getMoves(BLACK);
+	printf("\n");
+	printMovesArr(g_game[g_numMoves].candidateMoves, BB_BITS);
+}
+
+
 int main(){	
 	initGame();
 //	testGame();	
+
+//testGame3();
 
 /*
 	PaulFishArgs args;
@@ -905,7 +940,7 @@ int main(){
 	play(e.move, WHITE);
 	*/
 
-//	testGame();
+
 
 	Player_t player = BLACK;
 	int rankIn;
@@ -937,7 +972,7 @@ int main(){
 		player = getOpp(player);
 	}
 	printGame();
-	
+
 
 
 /*
