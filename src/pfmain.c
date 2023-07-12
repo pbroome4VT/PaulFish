@@ -29,6 +29,11 @@ struct BitboardStruct{
 };
 
 
+typedef struct MoveStruct Move;
+struct MoveStruct{
+	int square;
+	int score;
+};
 
 typedef struct GameStruct Game;
 struct GameStruct{
@@ -36,6 +41,9 @@ struct GameStruct{
 	char captures [2];		/* all bitboard indexed by Player_t. example horzBB[BLACK] */
 	Bitboard occupancies[2];
 	Bitboard star1Occupancies;
+	int candidateMovesLen;
+	Move newCandidateMoves[GAME_BOARD_SQUARES];
+
 	int candidateMoves[GAME_BOARD_SQUARES];
 };
 
@@ -62,6 +70,7 @@ uint64_t invChunkIndexToU64Table[64];
 Bitboard inBoundsMask;
 Bitboard star1MaskTable[BB_BITS];
 Bitboard star2MaskTable[BB_BITS];
+int bitDistanceFromEdgeTable[BB_BITS];
 
 
 
@@ -243,6 +252,7 @@ int getBit(Bitboard *bb, int bit){
 	return bb->bitChunk[bitToChunkTable[bit]] & (chunkIndexToU64Table[bitToChunkIndexTable[bit]])   ? 1:0;
 }
 
+
 int pntToBit(int rank, int file){
 	return rank * 20 + file;
 }
@@ -259,7 +269,8 @@ int bitToFile(int bit){
 				init functions
 
 =======================================================*/
-
+#define MAX(x,y) (((x) > (y)) ? (x) : (y))
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
 
 void initBitToChunkTable(){
 	for(int i = 0; i < BB_BITS; i++){
@@ -316,6 +327,16 @@ void initStarMaskTables(){
 	}
 }
 
+void initBitDistanceFromEdgeTable(){
+	for(int bit = 0 ; bit < BB_BITS; bit++){
+		int rank = bitToRank(bit);
+		int file = bitToFile(bit);
+		int rankDist = MIN(rank, 18-rank);
+		int fileDist = MIN(file, 18- file);
+		int dist = MIN(rankDist, fileDist);
+		bitDistanceFromEdgeTable[bit] = dist;
+	}
+}
 
 void initGame(){
 	g_numMoves = 0;
@@ -325,6 +346,7 @@ void initGame(){
 	initChunkIndexToU64Tables();
 	initInBoundsMask();
 	initStarMaskTables();
+	initBitDistanceFromEdgeTable();
 }
 
 
@@ -355,6 +377,38 @@ int playerGetCaps(Player_t player){
 }
 void playerAddCaps(int caps, Player_t player){
 	g_game[g_numMoves].captures[player] += caps;
+}
+
+
+void appendCandidateMove(int bit){
+	Game *frame = &(g_game[g_numMoves]);
+	frame->newCandidateMoves[frame->candidateMovesLen++].square = bit;
+}
+
+Move getCandidateMove(int index){
+	return g_game[g_numMoves].newCandidateMoves[index];
+}
+
+void setCandidateMove(int index, Move move){
+	 g_game[g_numMoves].newCandidateMoves[index] = move;
+}
+
+int getCandidateMoveSquare(int index){
+	return g_game[g_numMoves].newCandidateMoves[index].square;
+}
+
+int getCandidateMoveScore(int index){
+	return g_game[g_numMoves].newCandidateMoves[index].score;	
+}
+
+void setCandidateMoveScore(int index, int score){
+	g_game[g_numMoves].newCandidateMoves[index].score = score;
+}
+
+void swapCandidateMoves(int i, int k){
+	Move tmp = getCandidateMove(i);
+	setCandidateMove(i, getCandidateMove(k));
+	setCandidateMove(k, tmp);
 }
 
 
@@ -427,6 +481,7 @@ int makeCaptures(int bit, Player_t player){
 
 
 int isCapture(int bit, Player_t player){
+	int numCaps = 0;
 	Player_t opp = getOpp(player);
 	for(int direction = 0; direction < 4; direction++){
 		Offset offset = PRINCIPAL_DIRECTION[direction];
@@ -435,7 +490,7 @@ int isCapture(int bit, Player_t player){
 			playerGetOcc(bit + 2 * offset, opp) &&
 			playerGetOcc(bit + 3 * offset, player))
 		{
-			return 1;
+			numCaps++;
 		}
 		if(
 			bit - 3 * offset >= 0 &&
@@ -443,10 +498,10 @@ int isCapture(int bit, Player_t player){
 			playerGetOcc(bit - 2 * offset, opp) &&
 			playerGetOcc(bit - 3 * offset, player))
 		{
-			return 1;
+			numCaps++;
 		}
 	}
-	return 0;
+	return numCaps;
 }
 
 int isConnect5(int bitIndex, Player_t player){
@@ -501,6 +556,82 @@ void undo(){
 				  Move Generation
 
 =======================================================*/
+
+void bbAndNotOccupied(Bitboard *b){
+	Bitboard tmp = g_game[g_numMoves].occupancies[BLACK];
+	bbOr(&tmp, &(g_game[g_numMoves].occupancies[WHITE]));
+	bbInv(&tmp);
+	bbAnd(b, &tmp);
+}
+
+// populates candidate moves
+void getCandidateMoves(){
+	//TODO maybe try using star2occupancies?
+	Bitboard b = g_game[g_numMoves].star1Occupancies;
+	bbAndNotOccupied(&b);
+	int bit;
+	while ( (bit = bbGetLS1B(&b)) != -1){
+		unsetBit(&b, bit);	
+		appendCandidateMove(bit);
+	}
+}
+
+/* move value should be following order:
+	1) making connect 5
+	2) blocking connect 5
+	3) making captures
+	4) block captures
+	5) playing toward center
+	
+	higher order moves should trump score of lower order moves
+*/
+#define CONNECT5_WEIGHT 		(10000)
+#define CONNECT5_BLOCK_WEIGHT  	(1000)
+#define CAPTURE_WEIGHT  		(100)
+#define CAPTURE_BLOCK_WEIGHT	(10)
+#define CENTRALIZATION_WEIGHT	(1)
+
+// iterates over candidate moves and attatches scores
+void scoreCandidateMoves(Player_t player){
+	int len = g_game[g_numMoves].candidateMovesLen;
+	Player_t opp = getOpp(player);
+	for (int i = 0; i < len; i++){	
+		int moveScore = 0;
+		int bit = getCandidateMoveSquare(i);
+		moveScore += CONNECT5_WEIGHT * isConnect5(bit, player);	
+		moveScore += CONNECT5_BLOCK_WEIGHT * isConnect5(bit, opp);
+		moveScore += CAPTURE_WEIGHT * isCapture( bit, player );
+		moveScore += CAPTURE_BLOCK_WEIGHT * isCapture( bit, opp );
+		moveScore += CENTRALIZATION_WEIGHT * bitDistanceFromEdgeTable[bit];
+		setCandidateMoveScore(i, moveScore);	
+		if(moveScore >= 10000){	
+			return;
+		}
+	}
+}
+
+
+/* 
+	* uses selection sort
+ 	* This could be replaced by quicksort for more speed
+*/
+void sortCandidateMoves(){
+	int len  = g_game[g_numMoves].candidateMovesLen;
+	for(int i = 0; i < len; i++){
+		int maxIndex = i;
+		int maxScore = getCandidateMoveScore(i);
+		for(int k = i + 1; k < len; k++){
+			int tmpScore = getCandidateMoveScore(k);
+			if(tmpScore > maxScore){
+				maxIndex = k;
+				maxScore = tmpScore;
+			}
+		}
+		swapCandidateMoves(i, maxIndex);
+	}
+}
+
+
 int addMoves(int *arr, Bitboard *b){
 	int i = 0;
 	int bit;
@@ -511,12 +642,18 @@ int addMoves(int *arr, Bitboard *b){
 	return i;
 }
 
-void bbAndNotOccupied(Bitboard *b){
-	Bitboard tmp = g_game[g_numMoves].occupancies[BLACK];
-	bbOr(&tmp, &(g_game[g_numMoves].occupancies[WHITE]));
-	bbInv(&tmp);
-	bbAnd(b, &tmp);
+
+
+void printCandidateMoves(){
+	int len = g_game[g_numMoves].candidateMovesLen;
+	for(int i = 0; i < len; i++){
+		Move move = getCandidateMove(i);
+		printf("Score: %5d\t(%c,%d)\n", move.score, bitToFile(move.square) +'a', bitToRank(move.square));
+	}
+	printf("\n");
 }
+
+
 
 void bbGetConnect5Moves(Bitboard *b, Player_t player){
 	memset(b, 0,  sizeof(*b));
@@ -589,25 +726,6 @@ int getMoves(Player_t player){
 	return moveIndex;
 }
 
-
-/*
-//all possible moves
-Bitboard getAllMoves(){
-	Bitboard b;
-	b = g_game[g_numMoves].occupancies[BLACK];
-	bbOr(&b, &(g_game[g_numMoves].occupancies[WHITE]));
-	bbAnd(bbInv(&b), &inBoundsMask);
-	return b;
-}
-
-//chebychev 1 moves
-Bitboard getMovesStar1(){
-	Bitboard b = g_game[g_numMoves].star1Occupancies;
-	bbXor(&b, &(g_game[g_numMoves].occupancies[BLACK]));
-	bbXor(&b, &(g_game[g_numMoves].occupancies[WHITE]));
-	return b;
-}
-*/
 /*=====================================================
 
 				  AI data+functions
@@ -915,30 +1033,29 @@ void testGame2(){
 }
 
 void testGame3(){
-	play(pntToBit(10,8), BLACK);
 	play(pntToBit(9,8), BLACK);
 	play(pntToBit(8,8), BLACK);
 	play(pntToBit(7,8), BLACK);
 	play(pntToBit(8,7), BLACK);
-	play(pntToBit(8,6), BLACK);
 	play(pntToBit(8,5), BLACK);
-	play(pntToBit(11,6), WHITE);
-	play(pntToBit(11,7), WHITE);
 	play(pntToBit(11,8), WHITE);
 	play(pntToBit(11,9), WHITE);
 	play(pntToBit(10,9), WHITE);
+	play(pntToBit(11,10), WHITE);
 	printGame();	
-	getMoves(BLACK);
-	printf("\n");
-	printMovesArr(g_game[g_numMoves].candidateMoves, BB_BITS);
+	getCandidateMoves();
+	scoreCandidateMoves(BLACK);
+	sortCandidateMoves();
+	printCandidateMoves();
 }
 
 
 int main(){	
 	initGame();
+
 //	testGame();	
 
-//testGame3();
+	testGame3();
 
 /*
 	PaulFishArgs args;
@@ -949,7 +1066,7 @@ int main(){
 	play(e.move, WHITE);
 	*/
 
-
+/*
 
 	Player_t player = BLACK;
 	int rankIn;
@@ -981,7 +1098,7 @@ int main(){
 		player = getOpp(player);
 	}
 	printGame();
-	
+*/	
 
 
 
